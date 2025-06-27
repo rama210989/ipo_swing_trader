@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 
-st.title("📈 Indian IPO Monitor (Using Uploaded CSV)")
+st.title("📈 Indian IPO Monitor (Data Source - https://chartink.com/screener/ipo-365-atfinallynitin)")
 
 # Replace with your actual raw GitHub CSV URL here:
 csv_url = "https://raw.githubusercontent.com/rama210989/ipo_swing_trader/refs/heads/main/IPO%20365%20finallynitin%2C%20Technical%20Analysis%20Scanner.csv"
