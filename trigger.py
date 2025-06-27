@@ -8,34 +8,48 @@ def get_price_data(ticker, days=180):
     return df if not df.empty else None
 
 def analyze_triggers(df):
+    # Basic checks
     if len(df) < 30 or 'Open' not in df.columns or 'Low' not in df.columns or 'Close' not in df.columns:
         return None
 
-    if isinstance(df['Close'], pd.DataFrame):
-        df['Close'] = df['Close'].iloc[:, 0]
+    # Handle multi-column DataFrame (multi-ticker)
+    open_col = df['Open']
+    low_col = df['Low']
+    close_col = df['Close']
 
-    base_price = float(df['Open'].iloc[0])
-    min_low = float(df['Low'].min())
+    if isinstance(open_col, pd.DataFrame):
+        open_col = open_col.iloc[:, 0]
+    if isinstance(low_col, pd.DataFrame):
+        low_col = low_col.iloc[:, 0]
+    if isinstance(close_col, pd.DataFrame):
+        close_col = close_col.iloc[:, 0]
+
+    base_price = float(open_col.iloc[0])
+    min_low = float(low_col.min())
     dip_pct = (base_price - min_low) / base_price * 100
-    last_close = float(df['Close'].iloc[-1])
+    last_close = float(close_col.iloc[-1])
 
     u_curve_formed = dip_pct >= 5
 
-    df['EMA20'] = df['Close'].ewm(span=20, adjust=False).mean()
-    df['EMA50'] = df['Close'].ewm(span=50, adjust=False).mean()
+    # Compute EMAs on the close prices
+    ema20 = close_col.ewm(span=20, adjust=False).mean()
+    ema50 = close_col.ewm(span=50, adjust=False).mean()
 
     buy_trigger = False
     buy_date = None
 
     if u_curve_formed:
-        crossed = (df['Close'] > base_price) & (df['Close'].shift(1) <= base_price)
-        if isinstance(crossed, pd.DataFrame):
-            crossed = crossed.iloc[:, 0]
+        crossed = (close_col > base_price) & (close_col.shift(1) <= base_price)
         crossed = crossed.fillna(False).astype(bool)
 
         if crossed.any():
             buy_trigger = True
-            buy_date = crossed.idxmax()
+            # idxmax returns the index position of first True in crossed
+            first_cross_idx = crossed.idxmax()
+            if first_cross_idx in df.index:
+                buy_date = first_cross_idx
+            else:
+                buy_date = None
         else:
             buy_trigger = False
             buy_date = None
@@ -46,12 +60,26 @@ def analyze_triggers(df):
     if buy_trigger and buy_date in df.index:
         df_post_buy = df.loc[buy_date:]
         if len(df_post_buy) > 0:
-            last_close_post_buy = float(df_post_buy['Close'].iloc[-1])
-            ema20_latest = float(df_post_buy['EMA20'].iloc[-1])
-            ema50_latest = float(df_post_buy['EMA50'].iloc[-1])
+            # Make sure to use same column type for EMAs here
+            if isinstance(ema20, pd.Series):
+                ema20_latest = ema20.loc[df_post_buy.index[-1]]
+            else:
+                ema20_latest = ema20.iloc[-1]
+
+            if isinstance(ema50, pd.Series):
+                ema50_latest = ema50.loc[df_post_buy.index[-1]]
+            else:
+                ema50_latest = ema50.iloc[-1]
+
+            last_close_post_buy = close_col.loc[df_post_buy.index[-1]]
 
             sell_30_trigger = last_close_post_buy < ema20_latest
             sell_all_trigger = last_close_post_buy < ema50_latest
+
+    # Convert booleans to plain Python bool to avoid pandas truth value errors
+    buy_trigger = bool(buy_trigger)
+    sell_30_trigger = bool(sell_30_trigger)
+    sell_all_trigger = bool(sell_all_trigger)
 
     return {
         "Base Price": round(base_price, 2),
