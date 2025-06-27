@@ -4,7 +4,7 @@ import pandas as pd
 st.title("📈 Indian IPO Monitor (Using Uploaded CSV)")
 
 # Replace with your actual raw GitHub CSV URL here:
-csv_url = "IPO 365 finallynitin, Technical Analysis Scanner.csv"
+csv_url = "https://raw.githubusercontent.com/rama210989/ipo_swing_trader/refs/heads/main/IPO%20365%20finallynitin%2C%20Technical%20Analysis%20Scanner.csv"
 
 @st.cache_data  # Cache to avoid reloading on every interaction
 def load_ipo_csv(url):
