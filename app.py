@@ -54,7 +54,7 @@ def analyze_triggers(df):
     min_low = float(df['Low'].min())
     dip_pct = (base_price - min_low) / base_price * 100
     last_close = float(df['Close'].iloc[-1])
-    u_curve_formed = dip_pct >= 5
+    u_curve_formed = dip_pct >= 5  # threshold is 5%
 
     df['EMA20'] = df['Close'].ewm(span=20, adjust=False).mean()
     df['EMA50'] = df['Close'].ewm(span=50, adjust=False).mean()
@@ -64,7 +64,7 @@ def analyze_triggers(df):
 
     if u_curve_formed:
         crossed = (df['Close'] > base_price) & (df['Close'].shift(1) <= base_price)
-        crossed_series = crossed[crossed]  # Filter to where True
+        crossed_series = crossed[crossed]
         if not crossed_series.empty:
             buy_trigger = True
             buy_date = crossed_series.index[0]
@@ -75,12 +75,12 @@ def analyze_triggers(df):
     if buy_trigger and buy_date in df.index:
         df_post_buy = df.loc[buy_date:]
         if len(df_post_buy) > 0:
-            last_close_post_buy = df_post_buy['Close'].iloc[-1]
-            ema20_latest = df_post_buy['EMA20'].iloc[-1]
-            ema50_latest = df_post_buy['EMA50'].iloc[-1]
+            last_close_post_buy = float(df_post_buy['Close'].iloc[-1])
+            ema20_latest = float(df_post_buy['EMA20'].iloc[-1])
+            ema50_latest = float(df_post_buy['EMA50'].iloc[-1])
 
-            sell_30_trigger = last_close_post_buy < ema20_latest
-            sell_all_trigger = last_close_post_buy < ema50_latest
+            sell_30_trigger = bool(last_close_post_buy < ema20_latest)
+            sell_all_trigger = bool(last_close_post_buy < ema50_latest)
 
     return {
         "Base Price (IPO Listing Price)": round(base_price, 2),
@@ -94,7 +94,7 @@ def analyze_triggers(df):
         "SELL ALL Trigger": "🚪" if sell_all_trigger else ""
     }
 
-# Run analysis
+# Process each symbol
 results = []
 
 for symbol in filtered_df['Symbol'].unique():
@@ -111,7 +111,7 @@ for symbol in filtered_df['Symbol'].unique():
         **signals
     })
 
-# Display
+# Display table
 if results:
     results_df = pd.DataFrame(results)
     st.subheader("📊 Trigger Table")
