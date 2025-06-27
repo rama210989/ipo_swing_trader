@@ -4,7 +4,7 @@ import yfinance as yf
 import plotly.graph_objs as go
 from datetime import datetime, timedelta
 
-st.title("📈 Recent IPOs")
+st.title("📈 Recent IPOs - Swing Trade Monitor")
 st.markdown("*Data from Chartink screener: [IPO 365 by @finallynitin](https://chartink.com/screener/ipo-365-atfinallynitin)*")
 
 # CSV from GitHub
@@ -33,66 +33,53 @@ st.dataframe(filtered_df)
 st.markdown("---")
 st.header("📊 U-Shape Recovery & EMA Signals (Steps 2–4)")
 
-# Get Yahoo Finance data
 def get_price_data(ticker, days=90):
     since = datetime.today() - timedelta(days=days)
     df = yf.download(ticker + ".NS", start=since.strftime("%Y-%m-%d"))
     return df if not df.empty else None
 
-# U-shape detection
-def detect_u_shape(df):
-    if len(df) < 30 or 'Close' not in df.columns:
-        return False
+def detect_u_curve_and_signals(df):
+    if len(df) < 30 or 'Open' not in df.columns or 'Low' not in df.columns or 'Close' not in df.columns:
+        return None  # Not enough data or columns
 
-    close_prices = df['Close'].dropna()
-    if len(close_prices) < 30:
-        return False
+    # Base price = Opening price on first available day
+    base_price = df['Open'].iloc[0]
 
-    try:
-        # Use .values[min_pos] to get scalar float instead of Series
-        min_pos = close_prices.values.argmin()
-        base_price = float(close_prices.values[min_pos])
-        latest_close = float(close_prices.values[-1])
-        recovery = float(close_prices.values[min_pos:].max())
-    except Exception as e:
-        st.warning(f"Error processing prices for ticker: {e}")
-        return False
+    # Minimum low price after IPO day
+    min_low = df['Low'].min()
 
-    cond1 = latest_close > base_price
-    cond2 = (recovery - base_price) / base_price > 0.1  # 10% rebound from base
+    # % dip from base price
+    dip_pct = (base_price - min_low) / base_price * 100
 
-    # Debug prints
-    st.write(f"Latest Close: {latest_close:.2f}, Base Price: {base_price:.2f}")
-    st.write(f"Recovery: {recovery:.2f}, Rebound %: {(recovery - base_price) / base_price:.2%}")
-    st.write(f"Conditions: cond1={cond1}, cond2={cond2}")
+    # Did U-curve dip >= 10% happen?
+    u_curve_formed = dip_pct >= 10
 
-    return cond1 and cond2
+    # Last close price
+    last_close = df['Close'].iloc[-1]
 
-# EMA logic
-def apply_ema_signals(df):
-    df['EMA20'] = df['Close'].ewm(span=20).mean()
-    df['EMA50'] = df['Close'].ewm(span=50).mean()
-    return df
+    # Calculate EMAs
+    df['EMA20'] = df['Close'].ewm(span=20, adjust=False).mean()
+    df['EMA50'] = df['Close'].ewm(span=50, adjust=False).mean()
 
-# Trade signal logic
-def trade_signals(df, base_price):
-    try:
-        latest_close = float(df['Close'].iloc[-1])
-        ema20 = float(df['EMA20'].iloc[-1])
-        ema50 = float(df['EMA50'].iloc[-1])
-    except Exception as e:
-        st.warning(f"Error extracting latest prices/EMA: {e}")
-        return {}
+    # Buy trigger: price crosses above base price after dip
+    buy_signal = u_curve_formed and (last_close > base_price)
 
-    stop_loss = base_price * 0.95
+    # Sell signals
+    sell_30 = last_close < df['EMA20'].iloc[-1]  # below EMA20
+    sell_all = last_close < df['EMA50'].iloc[-1]  # below EMA50
+
     return {
-        "📥 Entry Trigger": latest_close > base_price,
-        "⚠️ Stop Loss Hit": latest_close < stop_loss,
-        "🔁 Exit 30% (below EMA20)": latest_close < ema20,
-        "🚪 Exit All (below EMA50)": latest_close < ema50
+        "base_price": base_price,
+        "min_low": min_low,
+        "dip_pct": dip_pct,
+        "u_curve_formed": u_curve_formed,
+        "last_close": last_close,
+        "buy_signal": buy_signal,
+        "sell_30": sell_30,
+        "sell_all": sell_all,
+        "df": df  # return df with EMAs for plotting
     }
 
-# Analyze each stock
 for symbol in filtered_df['Symbol'].unique():
     st.markdown(f"#### {symbol}")
     hist_df = get_price_data(symbol)
@@ -101,20 +88,41 @@ for symbol in filtered_df['Symbol'].unique():
         st.write("⚠️ Not enough historical data.")
         continue
 
-    if detect_u_shape(hist_df):
-        base_price = float(hist_df['Close'].min())
-        hist_df = apply_ema_signals(hist_df)
-        signals = trade_signals(hist_df, base_price)
+    signals = detect_u_curve_and_signals(hist_df)
+    if signals is None:
+        st.write("⚠️ Data insufficient for analysis.")
+        continue
 
-        # Plot price and EMA chart
-        fig = go.Figure()
-        fig.add_trace(go.Scatter(y=hist_df['Close'], name='Close'))
-        fig.add_trace(go.Scatter(y=hist_df['EMA20'], name='EMA20'))
-        fig.add_trace(go.Scatter(y=hist_df['EMA50'], name='EMA50'))
-        fig.update_layout(title=f"{symbol} - Price & EMA Chart", xaxis_title="Date", yaxis_title="Price")
-        st.plotly_chart(fig)
+    st.write(f"Base Price (IPO Open): ₹{signals['base_price']:.2f}")
+    st.write(f"Lowest Price since IPO: ₹{signals['min_low']:.2f}")
+    st.write(f"Max Dip from Base Price: {signals['dip_pct']:.2f}%")
 
-        st.write("**📊 Trade Signals:**")
-        st.json(signals)
+    if not signals['u_curve_formed']:
+        st.write("⏳ No U-curve dip of at least 10% detected yet.")
+        continue
+
+    st.write(f"Last Close Price: ₹{signals['last_close']:.2f}")
+
+    # Buy condition
+    if signals['buy_signal']:
+        st.success("✅ BUY signal: Price crossed above IPO listing price after U-curve dip.")
     else:
-        st.write("⏳ No U-shaped recovery detected.")
+        st.info("ℹ️ Waiting for price to cross back above IPO listing price for BUY trigger.")
+
+    # Sell conditions
+    if signals['sell_all']:
+        st.warning("🚪 SELL ALL signal: Price below EMA50.")
+    elif signals['sell_30']:
+        st.warning("🔁 SELL 30% signal: Price below EMA20.")
+    else:
+        st.info("📈 Hold: Price above EMA20 and EMA50.")
+
+    # Plot price chart with EMAs and base price line
+    df = signals['df']
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(x=df.index, y=df['Close'], name='Close Price'))
+    fig.add_trace(go.Scatter(x=df.index, y=df['EMA20'], name='EMA20'))
+    fig.add_trace(go.Scatter(x=df.index, y=df['EMA50'], name='EMA50'))
+    fig.add_trace(go.Scatter(x=df.index, y=[signals['base_price']] * len(df), name='Base Price (IPO Open)', line=dict(dash='dash')))
+    fig.update_layout(title=f"{symbol} Price Chart with EMA & Base Price", xaxis_title="Date", yaxis_title="Price (₹)")
+    st.plotly_chart(fig)
