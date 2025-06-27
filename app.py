@@ -4,7 +4,8 @@ import pandas as pd
 st.title("📈 Recent IPOs")
 
 # Add a subtitle using Markdown
-st.markdown("**Source:** (https://chartink.com/screener/ipo-365-atfinallynitin)")
+st.markdown("*Data from Chartink screener: [IPO 365 by @finallynitin](https://chartink.com/screener/ipo-365-atfinallynitin)*")
+
 
 
 # Replace with your actual raw GitHub CSV URL here:
