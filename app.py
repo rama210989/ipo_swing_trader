@@ -85,4 +85,24 @@ for symbol in filtered_df['Symbol'].unique():
     st.markdown(f"#### {symbol}")
     hist_df = get_price_data(symbol)
 
-    if hist_df is None or len_
+    if hist_df is None or len(hist_df) < 30:
+        st.write("⚠️ Not enough historical data.")
+        continue
+
+    if detect_u_shape(hist_df):
+        base_price = float(hist_df['Close'].min())
+        hist_df = apply_ema_signals(hist_df)
+        signals = trade_signals(hist_df, base_price)
+
+        # Plot price and EMA chart
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(y=hist_df['Close'], name='Close'))
+        fig.add_trace(go.Scatter(y=hist_df['EMA20'], name='EMA20'))
+        fig.add_trace(go.Scatter(y=hist_df['EMA50'], name='EMA50'))
+        fig.update_layout(title=f"{symbol} - Price & EMA Chart", xaxis_title="Date", yaxis_title="Price")
+        st.plotly_chart(fig)
+
+        st.write("**📊 Trade Signals:**")
+        st.json(signals)
+    else:
+        st.write("⏳ No U-shaped recovery detected.")
