@@ -40,14 +40,26 @@ def get_price_data(ticker, days=90):
     return df if not df.empty else None
 
 # U-shape detection
+
 def detect_u_shape(df):
+    # Ensure we have at least 30 data points
+    if len(df) < 30:
+        return False
+
+    # Index of minimum price (timestamp)
     min_idx = df['Close'].idxmin()
-    base_price = df['Close'].loc[min_idx]
-    recovery = df['Close'].iloc[min_idx:].max()
+    
+    # Convert to integer position
+    min_pos = df.index.get_loc(min_idx)
+
+    base_price = df['Close'].iloc[min_pos]
+    recovery = df['Close'].iloc[min_pos:].max()
+
     return (
         df['Close'].iloc[-1] > base_price and 
         (recovery - base_price) / base_price > 0.1
     )
+
 
 # EMA logic
 def apply_ema_signals(df):
