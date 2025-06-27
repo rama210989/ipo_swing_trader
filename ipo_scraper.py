@@ -10,13 +10,14 @@ def get_nse_recent_ipos():
 
     session = requests.Session()
     session.headers.update(headers)
+    session.get("https://www.nseindia.com", timeout=5)
 
-    # First call to get cookies set
-    session.get("https://www.nseindia.com")
+    r = session.get(url, timeout=10)
 
-    r = session.get(url)
+    if "application/json" not in r.headers.get("Content-Type", ""):
+        raise ValueError("NSE did not return JSON (likely blocked). Try again later.")
+
     data = r.json()
-
     ipo_list = data.get("data", [])
     df = pd.DataFrame(ipo_list)
     df['issuePrice'] = pd.to_numeric(df['issuePrice'], errors='coerce')
