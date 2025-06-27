@@ -26,8 +26,8 @@ def analyze_triggers(df):
 
     if u_curve_formed:
         crossed = (df['Close'] > base_price) & (df['Close'].shift(1) <= base_price)
-        crossed = crossed.fillna(False)
-        if crossed.any():
+        crossed = crossed.fillna(False).astype(bool)
+        if len(crossed) > 0 and crossed.any():
             buy_trigger = True
             buy_date = df.index[crossed.idxmax()]
         else:
@@ -58,4 +58,3 @@ def analyze_triggers(df):
         "SELL 30% Trigger": "🔁" if sell_30_trigger else "",
         "SELL ALL Trigger": "🚪" if sell_all_trigger else ""
     }
-
