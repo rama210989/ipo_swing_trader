@@ -28,12 +28,16 @@ def analyze_triggers(df):
         crossed = (df['Close'] > base_price) & (df['Close'].shift(1) <= base_price)
         crossed = crossed.fillna(False).astype(bool)
 
-        if crossed.sum() > 0:
-            buy_trigger = True
-            buy_date = df.index[crossed.idxmax()]
-        else:
+        if crossed.empty:
             buy_trigger = False
             buy_date = None
+        else:
+            if crossed.any():
+                buy_trigger = True
+                buy_date = df.index[crossed.idxmax()]
+            else:
+                buy_trigger = False
+                buy_date = None
 
     sell_30_trigger = False
     sell_all_trigger = False
