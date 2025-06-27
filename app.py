@@ -39,19 +39,12 @@ def get_price_data(ticker, days=90):
     df = yf.download(ticker + ".NS", start=since.strftime("%Y-%m-%d"))
     return df if not df.empty else None
 
-# U-shape detection
-
+# Detect U-shape recovery
 def detect_u_shape(df):
-    # Ensure we have at least 30 data points
     if len(df) < 30:
         return False
 
-    # Index of minimum price (timestamp)
-    min_idx = df['Close'].idxmin()
-    
-    # Convert to integer position
-    min_pos = df.index.get_loc(min_idx)
-
+    min_pos = df['Close'].argmin()
     base_price = df['Close'].iloc[min_pos]
     recovery = df['Close'].iloc[min_pos:].max()
 
@@ -60,8 +53,7 @@ def detect_u_shape(df):
         (recovery - base_price) / base_price > 0.1
     )
 
-
-# EMA logic
+# Apply EMA indicators
 def apply_ema_signals(df):
     df['EMA20'] = df['Close'].ewm(span=20).mean()
     df['EMA50'] = df['Close'].ewm(span=50).mean()
@@ -78,7 +70,7 @@ def trade_signals(df, base_price):
         "🚪 Exit All (below EMA50)": latest_close < df['EMA50'].iloc[-1]
     }
 
-# Analyze each stock
+# Analyze and display for each symbol
 for symbol in filtered_df['Symbol'].unique():
     st.markdown(f"#### {symbol}")
     hist_df = get_price_data(symbol)
@@ -88,15 +80,15 @@ for symbol in filtered_df['Symbol'].unique():
         continue
 
     if detect_u_shape(hist_df):
-        base_price = hist_df['Close'].min()
+        base_price = hist_df['Close'].iloc[hist_df['Close'].argmin()]
         hist_df = apply_ema_signals(hist_df)
         signals = trade_signals(hist_df, base_price)
 
         # Plot
         fig = go.Figure()
-        fig.add_trace(go.Scatter(y=hist_df['Close'], name='Close'))
-        fig.add_trace(go.Scatter(y=hist_df['EMA20'], name='EMA20'))
-        fig.add_trace(go.Scatter(y=hist_df['EMA50'], name='EMA50'))
+        fig.add_trace(go.Scatter(x=hist_df.index, y=hist_df['Close'], name='Close'))
+        fig.add_trace(go.Scatter(x=hist_df.index, y=hist_df['EMA20'], name='EMA20'))
+        fig.add_trace(go.Scatter(x=hist_df.index, y=hist_df['EMA50'], name='EMA50'))
         fig.update_layout(title=f"{symbol} - Price & EMA Chart", xaxis_title="Date", yaxis_title="Price")
         st.plotly_chart(fig)
 
