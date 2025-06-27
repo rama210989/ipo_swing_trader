@@ -54,7 +54,6 @@ def analyze_triggers(df):
     min_low = float(df['Low'].min())
     dip_pct = (base_price - min_low) / base_price * 100
     last_close = float(df['Close'].iloc[-1])
-
     u_curve_formed = dip_pct >= 5
 
     df['EMA20'] = df['Close'].ewm(span=20, adjust=False).mean()
@@ -65,9 +64,10 @@ def analyze_triggers(df):
 
     if u_curve_formed:
         crossed = (df['Close'] > base_price) & (df['Close'].shift(1) <= base_price)
-        if crossed.any():
+        crossed_series = crossed[crossed]  # Filter to where True
+        if not crossed_series.empty:
             buy_trigger = True
-            buy_date = crossed.idxmax()  # FIXED: returns the actual datetime index value
+            buy_date = crossed_series.index[0]
 
     sell_30_trigger = False
     sell_all_trigger = False
