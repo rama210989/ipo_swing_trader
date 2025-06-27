@@ -25,35 +25,39 @@ df = load_ipo_csv(csv_url)
 st.subheader("IPO List with Filters")
 chg_filter = st.slider("% Change filter", float(df['% Chg'].min()), float(df['% Chg'].max()), (float(df['% Chg'].min()), float(df['% Chg'].max())))
 price_filter = st.slider("Price filter", float(df['Price'].min()), float(df['Price'].max()), (float(df['Price'].min()), float(df['Price'].max())))
-filtered_df = df[(df['% Chg'] >= chg_filter[0]) & (df['% Chg'] <= chg_filter[1]) & 
+filtered_df = df[(df['% Chg'] >= chg_filter[0]) & (df['% Chg'] <= chg_filter[1]) &
                  (df['Price'] >= price_filter[0]) & (df['Price'] <= price_filter[1])]
 st.dataframe(filtered_df)
 
-# Analysis section
+# Section for signals
 st.markdown("---")
 st.header("📊 U-Shape Recovery & EMA Signals (Steps 2–4)")
 
-# Get Yahoo Finance data
+# Fetch price history
 def get_price_data(ticker, days=90):
     since = datetime.today() - timedelta(days=days)
     df = yf.download(ticker + ".NS", start=since.strftime("%Y-%m-%d"))
-    return df if not df.empty else None
+    return df if not df.empty and 'Close' in df.columns else None
 
-# Detect U-shape recovery
+# U-shape detection logic
 def detect_u_shape(df):
-    if len(df) < 30:
+    if len(df) < 30 or 'Close' not in df.columns:
         return False
 
-    min_pos = df['Close'].argmin()
-    base_price = df['Close'].iloc[min_pos]
-    recovery = df['Close'].iloc[min_pos:].max()
+    close_prices = df['Close'].dropna()
+    if len(close_prices) < 30:
+        return False
+
+    min_pos = close_prices.values.argmin()
+    base_price = close_prices.iloc[min_pos]
+    recovery = close_prices.iloc[min_pos:].max()
 
     return (
-        df['Close'].iloc[-1] > base_price and 
-        (recovery - base_price) / base_price > 0.1
+        close_prices.iloc[-1] > base_price and
+        (recovery - base_price) / base_price > 0.1  # >10% rebound from bottom
     )
 
-# Apply EMA indicators
+# EMA calculation
 def apply_ema_signals(df):
     df['EMA20'] = df['Close'].ewm(span=20).mean()
     df['EMA50'] = df['Close'].ewm(span=50).mean()
@@ -70,25 +74,31 @@ def trade_signals(df, base_price):
         "🚪 Exit All (below EMA50)": latest_close < df['EMA50'].iloc[-1]
     }
 
-# Analyze and display for each symbol
+# Loop through IPOs
 for symbol in filtered_df['Symbol'].unique():
     st.markdown(f"#### {symbol}")
     hist_df = get_price_data(symbol)
 
-    if hist_df is None or len(hist_df) < 30:
+    if hist_df is None:
+        st.write("⚠️ No historical price data available.")
+        continue
+
+    close_prices = hist_df['Close'].dropna()
+    if len(close_prices) < 30:
         st.write("⚠️ Not enough historical data.")
         continue
 
     if detect_u_shape(hist_df):
-        base_price = hist_df['Close'].iloc[hist_df['Close'].argmin()]
+        min_pos = close_prices.values.argmin()
+        base_price = close_prices.iloc[min_pos]
         hist_df = apply_ema_signals(hist_df)
         signals = trade_signals(hist_df, base_price)
 
-        # Plot
+        # Plot chart
         fig = go.Figure()
-        fig.add_trace(go.Scatter(x=hist_df.index, y=hist_df['Close'], name='Close'))
-        fig.add_trace(go.Scatter(x=hist_df.index, y=hist_df['EMA20'], name='EMA20'))
-        fig.add_trace(go.Scatter(x=hist_df.index, y=hist_df['EMA50'], name='EMA50'))
+        fig.add_trace(go.Scatter(y=hist_df['Close'], name='Close'))
+        fig.add_trace(go.Scatter(y=hist_df['EMA20'], name='EMA20'))
+        fig.add_trace(go.Scatter(y=hist_df['EMA50'], name='EMA50'))
         fig.update_layout(title=f"{symbol} - Price & EMA Chart", xaxis_title="Date", yaxis_title="Price")
         st.plotly_chart(fig)
 
