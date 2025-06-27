@@ -55,9 +55,8 @@ def analyze_triggers(df):
     dip_pct = (base_price - min_low) / base_price * 100
     last_close = float(df['Close'].iloc[-1])
 
-    u_curve_formed = dip_pct >= 5  # Use 5% dip threshold
+    u_curve_formed = dip_pct >= 5
 
-    # Calculate EMAs
     df['EMA20'] = df['Close'].ewm(span=20, adjust=False).mean()
     df['EMA50'] = df['Close'].ewm(span=50, adjust=False).mean()
 
@@ -66,9 +65,9 @@ def analyze_triggers(df):
 
     if u_curve_formed:
         crossed = (df['Close'] > base_price) & (df['Close'].shift(1) <= base_price)
-        if crossed.values.any():
+        if crossed.any():
             buy_trigger = True
-            buy_date = df.index[crossed.idxmax()]  # Safe first crossover date
+            buy_date = crossed.idxmax()  # FIXED: returns the actual datetime index value
 
     sell_30_trigger = False
     sell_all_trigger = False
@@ -84,17 +83,18 @@ def analyze_triggers(df):
             sell_all_trigger = last_close_post_buy < ema50_latest
 
     return {
-        "Base Price (IPO Listing Price)": base_price,
-        "Lowest Price Since IPO": min_low,
+        "Base Price (IPO Listing Price)": round(base_price, 2),
+        "Lowest Price Since IPO": round(min_low, 2),
         "Max Dip from Base Price (%)": round(dip_pct, 2),
-        "Last Close Price": last_close,
-        "U-Curve Dip ≥5%": u_curve_formed,
+        "Last Close Price": round(last_close, 2),
+        "U-Curve Dip ≥5%": "✅" if u_curve_formed else "",
         "BUY Trigger": "✅" if buy_trigger else "",
         "BUY Date": buy_date.strftime("%Y-%m-%d") if buy_date else "",
         "SELL 30% Trigger": "🔁" if sell_30_trigger else "",
         "SELL ALL Trigger": "🚪" if sell_all_trigger else ""
     }
 
+# Run analysis
 results = []
 
 for symbol in filtered_df['Symbol'].unique():
@@ -111,6 +111,7 @@ for symbol in filtered_df['Symbol'].unique():
         **signals
     })
 
+# Display
 if results:
     results_df = pd.DataFrame(results)
     st.subheader("📊 Trigger Table")
