@@ -8,11 +8,10 @@ def get_price_data(ticker, days=180):
     return df if not df.empty else None
 
 def analyze_triggers(df):
-    # Basic validation
     if len(df) < 30 or 'Open' not in df.columns or 'Low' not in df.columns or 'Close' not in df.columns:
         return None
 
-    # If 'Close' is a DataFrame (multi-level columns from yfinance), take first column
+    # Handle if 'Close' is a DataFrame (multi-column)
     if isinstance(df['Close'], pd.DataFrame):
         df['Close'] = df['Close'].iloc[:, 0]
 
@@ -23,7 +22,6 @@ def analyze_triggers(df):
 
     u_curve_formed = dip_pct >= 5
 
-    # Calculate EMAs
     df['EMA20'] = df['Close'].ewm(span=20, adjust=False).mean()
     df['EMA50'] = df['Close'].ewm(span=50, adjust=False).mean()
 
@@ -33,7 +31,7 @@ def analyze_triggers(df):
     if u_curve_formed:
         crossed = (df['Close'] > base_price) & (df['Close'].shift(1) <= base_price)
 
-        # Handle if crossed is a DataFrame (rare cases)
+        # Handle if crossed is DataFrame
         if isinstance(crossed, pd.DataFrame):
             crossed = crossed.iloc[:, 0]
 
@@ -41,7 +39,7 @@ def analyze_triggers(df):
 
         if crossed.any():
             buy_trigger = True
-            buy_date = crossed.idxmax()  # **FIXED**: direct index label (date)
+            buy_date = df.index[crossed.idxmax()]
         else:
             buy_trigger = False
             buy_date = None
@@ -56,8 +54,13 @@ def analyze_triggers(df):
             ema20_latest = df_post_buy['EMA20'].iloc[-1]
             ema50_latest = df_post_buy['EMA50'].iloc[-1]
 
-            sell_30_trigger = last_close_post_buy < ema20_latest
-            sell_all_trigger = last_close_post_buy < ema50_latest
+            # Explicitly cast to bool to avoid ValueError
+            sell_30_trigger = bool(last_close_post_buy < ema20_latest)
+            sell_all_trigger = bool(last_close_post_buy < ema50_latest)
+
+    else:
+        sell_30_trigger = False
+        sell_all_trigger = False
 
     return {
         "Base Price": round(base_price, 2),
@@ -66,6 +69,7 @@ def analyze_triggers(df):
         "Last Close": round(last_close, 2),
         "U-Curve Dip ≥5%": u_curve_formed,
         "BUY Trigger": "✅" if buy_trigger else "",
+        # Optional: remove BUY Date if you want to avoid errors
         "BUY Date": buy_date.strftime("%Y-%m-%d") if buy_date else "",
         "SELL 30% Trigger": "🔁" if sell_30_trigger else "",
         "SELL ALL Trigger": "🚪" if sell_all_trigger else ""
