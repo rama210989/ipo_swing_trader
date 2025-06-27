@@ -1,32 +1,26 @@
 import requests
 import pandas as pd
-from bs4 import BeautifulSoup
 
-def get_ipo_list_chittorgarh():
-    url = "https://www.chittorgarh.com/report/latest-ipos-in-india/82/"
+def get_nse_recent_ipos():
+    url = "https://www.nseindia.com/api/ipo-track-record"
     headers = {
-        "User-Agent": "Mozilla/5.0"
+        "User-Agent": "Mozilla/5.0",
+        "Referer": "https://www.nseindia.com/market-data/new-ipo"
     }
 
-    response = requests.get(url, headers=headers)
-    soup = BeautifulSoup(response.text, 'html.parser')
+    session = requests.Session()
+    session.headers.update(headers)
 
-    table = soup.find("table")
-    rows = table.find_all("tr")
+    # First call to get cookies set
+    session.get("https://www.nseindia.com")
 
-    data = []
-    for row in rows[1:]:  # Skip header row
-        cols = row.find_all("td")
-        if len(cols) >= 6:
-            company = cols[0].text.strip()
-            listing_date = pd.to_datetime(cols[4].text.strip(), errors='coerce')
-            issue_price = cols[2].text.strip().replace("₹", "").replace(",", "")
-            try:
-                issue_price = float(issue_price)
-            except:
-                issue_price = None
-            data.append([company, listing_date, issue_price])
+    r = session.get(url)
+    data = r.json()
 
-    df = pd.DataFrame(data, columns=["Company", "Listing Date", "Issue Price"])
-    df = df[df["Listing Date"] >= pd.Timestamp.now() - pd.DateOffset(years=1)]
+    ipo_list = data.get("data", [])
+    df = pd.DataFrame(ipo_list)
+    df['issuePrice'] = pd.to_numeric(df['issuePrice'], errors='coerce')
+    df['listDate'] = pd.to_datetime(df['listDate'], errors='coerce')
+    df = df[df['listDate'] >= pd.Timestamp.now() - pd.DateOffset(years=1)]
+    df = df[['companyName', 'symbol', 'issuePrice', 'listDate']]
     return df
