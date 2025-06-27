@@ -55,9 +55,9 @@ def detect_u_shape(df):
     cond1 = close_prices.iloc[-1] > base_price
     cond2 = (recovery - base_price) / base_price > 0.1
 
-    # Debug prints - remove if you want
-    st.write(f"Latest Close: {close_prices.iloc[-1]}, Base Price: {base_price}")
-    st.write(f"Recovery: {recovery}, Rebound %: {(recovery - base_price) / base_price:.2%}")
+    # Debug prints - formatted scalars
+    st.write(f"Latest Close: {close_prices.iloc[-1]:.2f}, Base Price: {base_price:.2f}")
+    st.write(f"Recovery: {recovery:.2f}, Rebound %: {(recovery - base_price) / base_price:.2%}")
     st.write(f"Conditions: cond1={cond1}, cond2={cond2}")
 
     return bool(cond1) and bool(cond2)
