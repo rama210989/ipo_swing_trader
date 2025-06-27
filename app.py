@@ -1,42 +1,94 @@
 import streamlit as st
 import pandas as pd
+import yfinance as yf
+import plotly.graph_objs as go
+from datetime import datetime, timedelta
 
 st.title("📈 Recent IPOs")
-
-# Add a subtitle using Markdown
 st.markdown("*Data from Chartink screener: [IPO 365 by @finallynitin](https://chartink.com/screener/ipo-365-atfinallynitin)*")
 
-
-
-# Replace with your actual raw GitHub CSV URL here:
+# CSV from GitHub
 csv_url = "https://raw.githubusercontent.com/rama210989/ipo_swing_trader/refs/heads/main/IPO%20365%20finallynitin%2C%20Technical%20Analysis%20Scanner.csv"
 
-@st.cache_data  # Cache to avoid reloading on every interaction
+@st.cache_data
 def load_ipo_csv(url):
     df = pd.read_csv(url)
-    
-    # Clean columns:
-    # Remove quotes from column names if any, strip spaces
     df.columns = [col.strip().replace('"', '') for col in df.columns]
-
-    # Clean and convert columns
     df['% Chg'] = df['% Chg'].str.replace('%', '', regex=False).astype(float)
     df['Price'] = df['Price'].astype(float)
-    # Remove commas from Volume and convert to int
     df['Volume'] = df['Volume'].str.replace(',', '', regex=False).astype(int)
-    
     return df
 
 df = load_ipo_csv(csv_url)
 
-st.dataframe(df)
-
-# Optional: Add filters for convenience
+# Filter UI
+st.subheader("IPO List with Filters")
 chg_filter = st.slider("% Change filter", float(df['% Chg'].min()), float(df['% Chg'].max()), (float(df['% Chg'].min()), float(df['% Chg'].max())))
 price_filter = st.slider("Price filter", float(df['Price'].min()), float(df['Price'].max()), (float(df['Price'].min()), float(df['Price'].max())))
-
 filtered_df = df[(df['% Chg'] >= chg_filter[0]) & (df['% Chg'] <= chg_filter[1]) & 
                  (df['Price'] >= price_filter[0]) & (df['Price'] <= price_filter[1])]
-
-st.markdown(f"### Filtered results ({len(filtered_df)})")
 st.dataframe(filtered_df)
+
+# Analysis section
+st.markdown("---")
+st.header("📊 U-Shape Recovery & EMA Signals (Steps 2–4)")
+
+# Get Yahoo Finance data
+def get_price_data(ticker, days=90):
+    since = datetime.today() - timedelta(days=days)
+    df = yf.download(ticker + ".NS", start=since.strftime("%Y-%m-%d"))
+    return df if not df.empty else None
+
+# U-shape detection
+def detect_u_shape(df):
+    min_idx = df['Close'].idxmin()
+    base_price = df['Close'].loc[min_idx]
+    recovery = df['Close'].iloc[min_idx:].max()
+    return (
+        df['Close'].iloc[-1] > base_price and 
+        (recovery - base_price) / base_price > 0.1
+    )
+
+# EMA logic
+def apply_ema_signals(df):
+    df['EMA20'] = df['Close'].ewm(span=20).mean()
+    df['EMA50'] = df['Close'].ewm(span=50).mean()
+    return df
+
+# Trade signal logic
+def trade_signals(df, base_price):
+    latest_close = df['Close'].iloc[-1]
+    stop_loss = base_price * 0.95
+    return {
+        "📥 Entry Trigger": latest_close > base_price,
+        "⚠️ Stop Loss Hit": latest_close < stop_loss,
+        "🔁 Exit 30% (below EMA20)": latest_close < df['EMA20'].iloc[-1],
+        "🚪 Exit All (below EMA50)": latest_close < df['EMA50'].iloc[-1]
+    }
+
+# Analyze each stock
+for symbol in filtered_df['Symbol'].unique():
+    st.markdown(f"#### {symbol}")
+    hist_df = get_price_data(symbol)
+
+    if hist_df is None or len(hist_df) < 30:
+        st.write("⚠️ Not enough historical data.")
+        continue
+
+    if detect_u_shape(hist_df):
+        base_price = hist_df['Close'].min()
+        hist_df = apply_ema_signals(hist_df)
+        signals = trade_signals(hist_df, base_price)
+
+        # Plot
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(y=hist_df['Close'], name='Close'))
+        fig.add_trace(go.Scatter(y=hist_df['EMA20'], name='EMA20'))
+        fig.add_trace(go.Scatter(y=hist_df['EMA50'], name='EMA50'))
+        fig.update_layout(title=f"{symbol} - Price & EMA Chart", xaxis_title="Date", yaxis_title="Price")
+        st.plotly_chart(fig)
+
+        st.write("**📊 Trade Signals:**")
+        st.json(signals)
+    else:
+        st.write("⏳ No U-shaped recovery detected.")
