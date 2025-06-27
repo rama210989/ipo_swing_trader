@@ -1,8 +1,6 @@
-import streamlit as st
-from ipo_scraper import get_ipo_list_chittorgarh
+from ipo_scraper import get_nse_recent_ipos
 
-st.title("📈 Indian IPO Swing Trading Monitor")
+st.title("📈 Indian IPO Monitor (NSE Source)")
 
-df = get_ipo_list_chittorgarh()
-st.write("### Recent IPOs in the Last 1 Year")
+df = get_nse_recent_ipos()
 st.dataframe(df)
