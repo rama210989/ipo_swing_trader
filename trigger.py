@@ -11,6 +11,10 @@ def analyze_triggers(df):
     if len(df) < 30 or 'Open' not in df.columns or 'Low' not in df.columns or 'Close' not in df.columns:
         return None
 
+    # Fix Close if multi-column DataFrame from yfinance
+    if isinstance(df['Close'], pd.DataFrame):
+        df['Close'] = df['Close'].iloc[:, 0]
+
     base_price = float(df['Open'].iloc[0])
     min_low = float(df['Low'].min())
     dip_pct = (base_price - min_low) / base_price * 100
@@ -28,16 +32,12 @@ def analyze_triggers(df):
         crossed = (df['Close'] > base_price) & (df['Close'].shift(1) <= base_price)
         crossed = crossed.fillna(False).astype(bool)
 
-        if crossed.empty:
+        if crossed.any():
+            buy_trigger = True
+            buy_date = df.index[crossed.idxmax()]
+        else:
             buy_trigger = False
             buy_date = None
-        else:
-            if crossed.any():
-                buy_trigger = True
-                buy_date = df.index[crossed.idxmax()]
-            else:
-                buy_trigger = False
-                buy_date = None
 
     sell_30_trigger = False
     sell_all_trigger = False
