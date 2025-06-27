@@ -40,14 +40,12 @@ filtered_df = df[
     (df['Price'] >= price_filter[0]) & (df['Price'] <= price_filter[1])
 ]
 
-# Function to fetch historical price data
 def get_price_data(ticker, days=90):
     since = datetime.today() - timedelta(days=days)
     df = yf.download(ticker + ".NS", start=since.strftime("%Y-%m-%d"))
     return df if not df.empty else None
 
-# Detect base price, lowest price, dip %, last close
-def detect_u_curve_metrics(df):
+def analyze_triggers(df):
     if len(df) < 30 or 'Open' not in df.columns or 'Low' not in df.columns or 'Close' not in df.columns:
         return None
 
@@ -56,14 +54,54 @@ def detect_u_curve_metrics(df):
     dip_pct = (base_price - min_low) / base_price * 100
     last_close = float(df['Close'].iloc[-1])
 
+    u_curve_formed = dip_pct >= 5  # Use 5% dip threshold
+
+    # Calculate EMAs
+    df['EMA20'] = df['Close'].ewm(span=20, adjust=False).mean()
+    df['EMA50'] = df['Close'].ewm(span=50, adjust=False).mean()
+
+    buy_trigger = False
+    buy_date = None
+
+    if u_curve_formed:
+        # Find first date Close crossed above base price after dip
+        # Condition: Close > base_price AND Close was below base_price on previous day(s)
+        crossed = (df['Close'] > base_price) & (df['Close'].shift(1) <= base_price)
+        if crossed.any():
+            buy_trigger = True
+            buy_date = df.index[crossed.argmax()]  # first date of crossover
+        else:
+            buy_trigger = False
+
+    # SELL triggers only valid if buy_trigger True
+    sell_30_trigger = False
+    sell_all_trigger = False
+
+    if buy_trigger:
+        # Consider only data after buy_date for sell signals
+        df_post_buy = df.loc[buy_date:]
+        # Latest close price after buy_date
+        last_close_post_buy = df_post_buy['Close'].iloc[-1]
+
+        # Get latest EMA values after buy_date
+        ema20_latest = df_post_buy['EMA20'].iloc[-1]
+        ema50_latest = df_post_buy['EMA50'].iloc[-1]
+
+        sell_30_trigger = last_close_post_buy < ema20_latest
+        sell_all_trigger = last_close_post_buy < ema50_latest
+
     return {
-        "Base Price": base_price,
-        "Lowest Price": min_low,
-        "Max Dip %": dip_pct,
-        "Last Close": last_close
+        "Base Price (IPO Listing Price)": base_price,
+        "Lowest Price Since IPO": min_low,
+        "Max Dip from Base Price (%)": dip_pct,
+        "Last Close Price": last_close,
+        "U-Curve Dip ≥5%": u_curve_formed,
+        "BUY Trigger": buy_trigger,
+        "BUY Date": buy_date.strftime("%Y-%m-%d") if buy_date else None,
+        "SELL 30% Trigger": sell_30_trigger,
+        "SELL ALL Trigger": sell_all_trigger
     }
 
-# Prepare results list
 results = []
 
 for symbol in filtered_df['Symbol'].unique():
@@ -71,19 +109,15 @@ for symbol in filtered_df['Symbol'].unique():
     if hist_df is None or len(hist_df) < 30:
         continue
 
-    metrics = detect_u_curve_metrics(hist_df)
-    if metrics is None:
+    signals = analyze_triggers(hist_df)
+    if signals is None:
         continue
 
     results.append({
         "Stock Name": symbol,
-        "Base Price (IPO Listing Price)": metrics["Base Price"],
-        "Lowest Price Since IPO": metrics["Lowest Price"],
-        "Max Dip from Base Price (%)": metrics["Max Dip %"],
-        "Last Close Price": metrics["Last Close"]
+        **signals
     })
 
-# Show the table
 if results:
     results_df = pd.DataFrame(results)
     st.dataframe(results_df)
