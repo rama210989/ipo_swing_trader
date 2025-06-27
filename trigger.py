@@ -8,11 +8,9 @@ def get_price_data(ticker, days=180):
     return df if not df.empty else None
 
 def analyze_triggers(df):
-    # Basic validation of input data
     if len(df) < 30 or 'Open' not in df.columns or 'Low' not in df.columns or 'Close' not in df.columns:
         return None
 
-    # Fix for multi-column in Close (sometimes yf returns multi-index)
     if isinstance(df['Close'], pd.DataFrame):
         df['Close'] = df['Close'].iloc[:, 0]
 
@@ -21,9 +19,8 @@ def analyze_triggers(df):
     dip_pct = (base_price - min_low) / base_price * 100
     last_close = float(df['Close'].iloc[-1])
 
-    u_curve_formed = dip_pct >= 5  # minimum 5% dip from base price
+    u_curve_formed = dip_pct >= 5
 
-    # Calculate EMAs for sell triggers
     df['EMA20'] = df['Close'].ewm(span=20, adjust=False).mean()
     df['EMA50'] = df['Close'].ewm(span=50, adjust=False).mean()
 
@@ -32,16 +29,13 @@ def analyze_triggers(df):
 
     if u_curve_formed:
         crossed = (df['Close'] > base_price) & (df['Close'].shift(1) <= base_price)
-
-        # If crossed is a DataFrame, get the first column (defensive)
         if isinstance(crossed, pd.DataFrame):
             crossed = crossed.iloc[:, 0]
-
         crossed = crossed.fillna(False).astype(bool)
 
         if crossed.any():
             buy_trigger = True
-            buy_date = crossed.idxmax()  # FIX: Use idxmax() directly, gives index label (datetime)
+            buy_date = crossed.idxmax()
         else:
             buy_trigger = False
             buy_date = None
@@ -52,9 +46,9 @@ def analyze_triggers(df):
     if buy_trigger and buy_date in df.index:
         df_post_buy = df.loc[buy_date:]
         if len(df_post_buy) > 0:
-            last_close_post_buy = df_post_buy['Close'].iloc[-1]
-            ema20_latest = df_post_buy['EMA20'].iloc[-1]
-            ema50_latest = df_post_buy['EMA50'].iloc[-1]
+            last_close_post_buy = float(df_post_buy['Close'].iloc[-1])
+            ema20_latest = float(df_post_buy['EMA20'].iloc[-1])
+            ema50_latest = float(df_post_buy['EMA50'].iloc[-1])
 
             sell_30_trigger = last_close_post_buy < ema20_latest
             sell_all_trigger = last_close_post_buy < ema50_latest
