@@ -3,6 +3,7 @@ import pandas as pd
 import yfinance as yf
 from datetime import datetime, timedelta
 
+st.set_page_config(layout="wide")
 st.title("📈 Recent IPOs - Swing Trade Monitor")
 st.markdown("*Data from Chartink screener: [IPO 365 by @finallynitin](https://chartink.com/screener/ipo-365-atfinallynitin)*")
 
@@ -21,7 +22,7 @@ def load_ipo_csv(url):
 df = load_ipo_csv(csv_url)
 
 # Filter UI
-st.subheader("IPO List with Filters")
+st.subheader("📋 IPO List with Filters")
 chg_filter = st.slider(
     "% Change filter",
     float(df['% Chg'].min()), 
@@ -64,42 +65,34 @@ def analyze_triggers(df):
     buy_date = None
 
     if u_curve_formed:
-        # Find first date Close crossed above base price after dip
-        # Condition: Close > base_price AND Close was below base_price on previous day(s)
         crossed = (df['Close'] > base_price) & (df['Close'].shift(1) <= base_price)
-        if crossed.any():
+        if crossed.values.any():
             buy_trigger = True
-            buy_date = df.index[crossed.argmax()]  # first date of crossover
-        else:
-            buy_trigger = False
+            buy_date = df.index[crossed.idxmax()]  # Safe first crossover date
 
-    # SELL triggers only valid if buy_trigger True
     sell_30_trigger = False
     sell_all_trigger = False
 
-    if buy_trigger:
-        # Consider only data after buy_date for sell signals
+    if buy_trigger and buy_date in df.index:
         df_post_buy = df.loc[buy_date:]
-        # Latest close price after buy_date
-        last_close_post_buy = df_post_buy['Close'].iloc[-1]
+        if len(df_post_buy) > 0:
+            last_close_post_buy = df_post_buy['Close'].iloc[-1]
+            ema20_latest = df_post_buy['EMA20'].iloc[-1]
+            ema50_latest = df_post_buy['EMA50'].iloc[-1]
 
-        # Get latest EMA values after buy_date
-        ema20_latest = df_post_buy['EMA20'].iloc[-1]
-        ema50_latest = df_post_buy['EMA50'].iloc[-1]
-
-        sell_30_trigger = last_close_post_buy < ema20_latest
-        sell_all_trigger = last_close_post_buy < ema50_latest
+            sell_30_trigger = last_close_post_buy < ema20_latest
+            sell_all_trigger = last_close_post_buy < ema50_latest
 
     return {
         "Base Price (IPO Listing Price)": base_price,
         "Lowest Price Since IPO": min_low,
-        "Max Dip from Base Price (%)": dip_pct,
+        "Max Dip from Base Price (%)": round(dip_pct, 2),
         "Last Close Price": last_close,
         "U-Curve Dip ≥5%": u_curve_formed,
-        "BUY Trigger": buy_trigger,
-        "BUY Date": buy_date.strftime("%Y-%m-%d") if buy_date else None,
-        "SELL 30% Trigger": sell_30_trigger,
-        "SELL ALL Trigger": sell_all_trigger
+        "BUY Trigger": "✅" if buy_trigger else "",
+        "BUY Date": buy_date.strftime("%Y-%m-%d") if buy_date else "",
+        "SELL 30% Trigger": "🔁" if sell_30_trigger else "",
+        "SELL ALL Trigger": "🚪" if sell_all_trigger else ""
     }
 
 results = []
@@ -120,6 +113,7 @@ for symbol in filtered_df['Symbol'].unique():
 
 if results:
     results_df = pd.DataFrame(results)
+    st.subheader("📊 Trigger Table")
     st.dataframe(results_df)
 else:
-    st.write("No data available for the selected filters and symbols.")
+    st.write("⚠️ No data available for the selected filters and symbols.")
