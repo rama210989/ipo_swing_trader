@@ -39,7 +39,7 @@ def get_price_data(ticker, days=90):
     df = yf.download(ticker + ".NS", start=since.strftime("%Y-%m-%d"))
     return df if not df.empty else None
 
-# U-shape detection (fixed to avoid ambiguous boolean error)
+# U-shape detection (fixed to avoid ambiguous boolean error & formatting issues)
 def detect_u_shape(df):
     if len(df) < 30 or 'Close' not in df.columns:
         return False
@@ -49,18 +49,19 @@ def detect_u_shape(df):
         return False
 
     min_pos = close_prices.values.argmin()
-    base_price = close_prices.iloc[min_pos]
-    recovery = close_prices.iloc[min_pos:].max()
+    base_price = float(close_prices.iloc[min_pos])
+    latest_close = float(close_prices.iloc[-1])
+    recovery = float(close_prices.iloc[min_pos:].max())
 
-    cond1 = close_prices.iloc[-1] > base_price
+    cond1 = latest_close > base_price
     cond2 = (recovery - base_price) / base_price > 0.1
 
     # Debug prints - formatted scalars
-    st.write(f"Latest Close: {close_prices.iloc[-1]:.2f}, Base Price: {base_price:.2f}")
+    st.write(f"Latest Close: {latest_close:.2f}, Base Price: {base_price:.2f}")
     st.write(f"Recovery: {recovery:.2f}, Rebound %: {(recovery - base_price) / base_price:.2%}")
     st.write(f"Conditions: cond1={cond1}, cond2={cond2}")
 
-    return bool(cond1) and bool(cond2)
+    return cond1 and cond2
 
 # EMA logic
 def apply_ema_signals(df):
@@ -84,24 +85,4 @@ for symbol in filtered_df['Symbol'].unique():
     st.markdown(f"#### {symbol}")
     hist_df = get_price_data(symbol)
 
-    if hist_df is None or len(hist_df) < 30:
-        st.write("⚠️ Not enough historical data.")
-        continue
-
-    if detect_u_shape(hist_df):
-        base_price = hist_df['Close'].min()
-        hist_df = apply_ema_signals(hist_df)
-        signals = trade_signals(hist_df, base_price)
-
-        # Plot price and EMA chart
-        fig = go.Figure()
-        fig.add_trace(go.Scatter(y=hist_df['Close'], name='Close'))
-        fig.add_trace(go.Scatter(y=hist_df['EMA20'], name='EMA20'))
-        fig.add_trace(go.Scatter(y=hist_df['EMA50'], name='EMA50'))
-        fig.update_layout(title=f"{symbol} - Price & EMA Chart", xaxis_title="Date", yaxis_title="Price")
-        st.plotly_chart(fig)
-
-        st.write("**📊 Trade Signals:**")
-        st.json(signals)
-    else:
-        st.write("⏳ No U-shaped recovery detected.")
+    if hist_df is None or len_
