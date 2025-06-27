@@ -23,10 +23,23 @@ df = load_ipo_csv(csv_url)
 
 # Filter UI
 st.subheader("IPO List with Filters")
-chg_filter = st.slider("% Change filter", float(df['% Chg'].min()), float(df['% Chg'].max()), (float(df['% Chg'].min()), float(df['% Chg'].max())))
-price_filter = st.slider("Price filter", float(df['Price'].min()), float(df['Price'].max()), (float(df['Price'].min()), float(df['Price'].max())))
-filtered_df = df[(df['% Chg'] >= chg_filter[0]) & (df['% Chg'] <= chg_filter[1]) & 
-                 (df['Price'] >= price_filter[0]) & (df['Price'] <= price_filter[1])]
+chg_filter = st.slider(
+    "% Change filter",
+    float(df['% Chg'].min()), 
+    float(df['% Chg'].max()), 
+    (float(df['% Chg'].min()), float(df['% Chg'].max()))
+)
+price_filter = st.slider(
+    "Price filter", 
+    float(df['Price'].min()), 
+    float(df['Price'].max()), 
+    (float(df['Price'].min()), float(df['Price'].max()))
+)
+
+filtered_df = df[
+    (df['% Chg'] >= chg_filter[0]) & (df['% Chg'] <= chg_filter[1]) & 
+    (df['Price'] >= price_filter[0]) & (df['Price'] <= price_filter[1])
+]
 st.dataframe(filtered_df)
 
 # Analysis section
@@ -39,14 +52,15 @@ def get_price_data(ticker, days=90):
     return df if not df.empty else None
 
 def detect_u_curve_and_signals(df):
+    # Check for minimum data length and columns
     if len(df) < 30 or 'Open' not in df.columns or 'Low' not in df.columns or 'Close' not in df.columns:
-        return None  # Not enough data or columns
+        return None  # Not enough data or required columns
 
-    # Base price = Opening price on first available day
-    base_price = df['Open'].iloc[0]
+    # Base price = Opening price on first available day (convert to float)
+    base_price = float(df['Open'].iloc[0])
 
-    # Minimum low price after IPO day
-    min_low = df['Low'].min()
+    # Minimum low price after IPO day (float)
+    min_low = float(df['Low'].min())
 
     # % dip from base price
     dip_pct = (base_price - min_low) / base_price * 100
@@ -54,8 +68,8 @@ def detect_u_curve_and_signals(df):
     # Did U-curve dip >= 10% happen?
     u_curve_formed = dip_pct >= 10
 
-    # Last close price
-    last_close = df['Close'].iloc[-1]
+    # Last close price (float)
+    last_close = float(df['Close'].iloc[-1])
 
     # Calculate EMAs
     df['EMA20'] = df['Close'].ewm(span=20, adjust=False).mean()
@@ -123,6 +137,15 @@ for symbol in filtered_df['Symbol'].unique():
     fig.add_trace(go.Scatter(x=df.index, y=df['Close'], name='Close Price'))
     fig.add_trace(go.Scatter(x=df.index, y=df['EMA20'], name='EMA20'))
     fig.add_trace(go.Scatter(x=df.index, y=df['EMA50'], name='EMA50'))
-    fig.add_trace(go.Scatter(x=df.index, y=[signals['base_price']] * len(df), name='Base Price (IPO Open)', line=dict(dash='dash')))
-    fig.update_layout(title=f"{symbol} Price Chart with EMA & Base Price", xaxis_title="Date", yaxis_title="Price (₹)")
+    fig.add_trace(go.Scatter(
+        x=df.index, 
+        y=[signals['base_price']] * len(df), 
+        name='Base Price (IPO Open)', 
+        line=dict(dash='dash')
+    ))
+    fig.update_layout(
+        title=f"{symbol} Price Chart with EMA & Base Price", 
+        xaxis_title="Date", 
+        yaxis_title="Price (₹)"
+    )
     st.plotly_chart(fig)
