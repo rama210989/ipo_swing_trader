@@ -31,7 +31,6 @@ def get_price_data(ticker, max_retries=3, sleep_sec=1):
     df = df.rename(columns=lambda x: str(x).strip())
     return df
 
-
 def analyze_triggers(df):
     try:
         required_cols = ['Open', 'Close', 'Low', 'High']
@@ -43,24 +42,16 @@ def analyze_triggers(df):
             print("❌ Not enough data for analysis")
             return None
 
-        # Ensure DataFrame index is datetime
-        if not pd.api.types.is_datetime64_any_dtype(df.index):
-            df.index = pd.to_datetime(df.index)
+        # Explicitly get base price and listing date from first row (IPO day)
+        base_price = df.head(1)['High'].values[0]
+        listing_date = df.head(1).index[0].strftime('%Y-%m-%d')
 
-        # Filter valid rows with non-null and positive High values
-        df_valid = df[df['High'].notna() & (df['High'] > 0)]
-
-        # Use Day 1 high as base price and get listing date
-        base_price = df_valid['High'].iloc[0]
-        listing_date = df_valid.index[0].strftime('%Y-%m-%d')
-
-        ltp = df['Close'].iloc[-1]  # Last traded price
+        ltp = df['Close'].iloc[-1]
 
         # Calculate EMA20 and EMA50
         df['EMA20'] = df['Close'].ewm(span=20, adjust=False).mean()
         df['EMA50'] = df['Close'].ewm(span=50, adjust=False).mean()
 
-        # Detect dip: any day where Low < 95% of base_price
         dip_threshold = base_price * 0.95
         dips = df[df['Low'] < dip_threshold]
 
@@ -82,7 +73,6 @@ def analyze_triggers(df):
 
         buy_signal = u_curve_detected and (ltp > base_price)
 
-        # SELL logic after BUY
         sell_signal = False
         sell_all_signal = False
         if buy_signal:
