@@ -40,28 +40,36 @@ with tab1:
                 continue
             triggers = analyze_triggers(price_df)
             if triggers:
-                triggers['Stock Name'] = row['Stock Name']
+                triggers['Stock Name'] = row['Stock Name']  # Add Stock Name here
                 results.append(triggers)
 
         if results:
             st.subheader("📊 Trigger Summary Table")
             res_df = pd.DataFrame(results)
 
-            # Rename columns for better display
+            # Put "Stock Name" as first column
+            cols = res_df.columns.tolist()
+            if "Stock Name" in cols:
+                cols.insert(0, cols.pop(cols.index("Stock Name")))
+                res_df = res_df[cols]
+
+            # Rename columns for better display (adjust as per keys returned from analyze_triggers)
             res_df = res_df.rename(columns={
-                "% dip from base price": "% Dip from Base Price",
-                "Max upside (%)": "Max Upside (%)",
-                "# sessions to max upside": "Sessions to Max Upside",
-                "# sessions in u-curve": "Sessions in U-Curve",
-                "Price at which sold 30%": "Price at Sold 30%",
-                "Price at which sold all": "Price at Sold All",
-                "% upside while selling 30%": "% Upside Selling 30%",
-                "% upside while selling all": "% Upside Selling All"
+                "% Dip": "% Dip from Base Price",
+                "Max Upside (%)": "Max Upside (%)",
+                "Sessions to Max Upside": "Sessions to Max Upside",
+                "# Sessions U-Curve": "Sessions in U-Curve",
+                "Price at Sold 30%": "Price at Sold 30%",
+                "Price at Sold All": "Price at Sold All",
+                "% Upside Selling 30%": "% Upside Selling 30%",
+                "% Upside Selling All": "% Upside Selling All"
             })
 
             st.dataframe(res_df)
+
             st.markdown("""
             ### 📖 Explanation of Columns:
+            - **Stock Name:** Company name of the IPO stock
             - **Listing Price:** IPO day 1 high price (base)
             - **Listing Date:** Date of IPO listing (first trading day)
             - **LTP:** Last traded price
@@ -147,7 +155,7 @@ with tab2:
                 if sell_30_price and sell_all_price:
                     break
 
-        # Calculate returns
+        # Return Calculation
         if buy_price:
             if sell_30_price:
                 qty = 0.3 * shares_bought
