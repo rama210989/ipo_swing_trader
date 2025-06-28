@@ -34,16 +34,17 @@ def get_price_data(ticker, max_retries=3, sleep_sec=1):
 
 def analyze_triggers(df):
     try:
-        required_cols = ['Open', 'Close', 'Low']
+        required_cols = ['Open', 'Close', 'Low', 'High']
         if not all(col in df.columns for col in required_cols):
             print(f"❌ Required columns missing: {df.columns}")
             return None
 
-        if len(df) < 20:  # Need at least 20 days for EMA20, ideally 50 for EMA50
+        if len(df) < 20:
             print("❌ Not enough data for analysis")
             return None
 
-        base_price = max(df['Open'].iloc[0], df['Close'].iloc[0])  # Listing Price = max(Open, Close) Day 1
+        # ✅ Use Day 1 high as the base price
+        base_price = df['High'].iloc[0]  # Highest price on IPO day
 
         ltp = df['Close'].iloc[-1]  # Last traded price
 
@@ -51,13 +52,10 @@ def analyze_triggers(df):
         df['EMA20'] = df['Close'].ewm(span=20, adjust=False).mean()
         df['EMA50'] = df['Close'].ewm(span=50, adjust=False).mean()
 
-        # Find the lowest price dip below base price by at least 5%
+        # Detect dip: any day where Low < 95% of base_price
         dip_threshold = base_price * 0.95
         dips = df[df['Low'] < dip_threshold]
 
-        # Check if U-curve formed:
-        # 1) Price dipped at least 5% below base price
-        # 2) Then price crossed back above base price (Close > base_price)
         u_curve_detected = False
         sessions_to_u_curve = None
         percent_dip = None
@@ -72,12 +70,11 @@ def analyze_triggers(df):
 
             if pd.notna(cross_idx):
                 u_curve_detected = True
-                # Calculate sessions to u-curve as number of trading days between dip and crossing
                 sessions_to_u_curve = df.index.get_loc(cross_idx) - df.index.get_loc(dip_idx)
 
         buy_signal = u_curve_detected and (ltp > base_price)
 
-        # SELL logic after buy:
+        # SELL logic after BUY
         sell_signal = False
         sell_all_signal = False
         if buy_signal:
@@ -102,14 +99,3 @@ def analyze_triggers(df):
     except Exception as e:
         print(f"⚠️ Trigger analysis failed: {e}")
         return None
-
-
-# Debug test (optional, remove before pushing if you want)
-if __name__ == "__main__":
-    tickers = ["ACMESOLAR.NS", "RELIANCE.NS"]
-    for t in tickers:
-        df = get_price_data(t)
-        if df is not None:
-            print(analyze_triggers(df))
-        else:
-            print(f"No data for {t}")
