@@ -9,7 +9,8 @@ def get_price_data(ticker, max_retries=3, sleep_sec=1):
     for attempt in range(max_retries):
         try:
             print(f"🔄 Fetching data for {ticker_full} (Attempt {attempt+1})")
-            df = yf.download(ticker_full, progress=False)
+            # Fetch full available history
+            df = yf.download(ticker_full, progress=False, period="max")
             
             if not df.empty:
                 print(f"✅ Data fetched: {len(df)} rows")
@@ -31,6 +32,7 @@ def get_price_data(ticker, max_retries=3, sleep_sec=1):
     df = df.rename(columns=lambda x: str(x).strip())
     return df
 
+
 def analyze_triggers(df):
     try:
         required_cols = ['Open', 'Close', 'Low', 'High']
@@ -42,10 +44,9 @@ def analyze_triggers(df):
             print("❌ Not enough data for analysis")
             return None
 
-        # Use the first available date (IPO day)
-        ipo_day = df.index.min()
-        base_price = df.loc[ipo_day, 'High']
-        listing_date = ipo_day.strftime('%Y-%m-%d')
+        # Get listing (IPO) date and base price = highest price on first available day
+        listing_date = df.index.min().strftime('%Y-%m-%d')  # first available date in data
+        base_price = df.loc[df.index.min(), 'High']
 
         ltp = df['Close'].iloc[-1]
 
@@ -99,3 +100,15 @@ def analyze_triggers(df):
     except Exception as e:
         print(f"⚠️ Trigger analysis failed: {e}")
         return None
+
+
+# Example debug run - Remove or comment this out in production
+if __name__ == "__main__":
+    tickers = ["ACMESOLAR.NS", "RELIANCE.NS"]
+    for t in tickers:
+        df = get_price_data(t)
+        if df is not None:
+            result = analyze_triggers(df)
+            print(f"{t} analysis:\n{result}\n")
+        else:
+            print(f"No data for {t}")
