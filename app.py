@@ -26,27 +26,22 @@ st.dataframe(df[['Stock Name', 'Symbol', '% Chg', 'Price', 'Volume']])
 
 # Trigger Button
 if st.button("🚀 Run Trigger Analysis"):
-    st.subheader("🔎 Trigger Debug Output")
     results = []
 
+    # No debug prints here, just silently collect results
     for symbol in df['Symbol']:
         ticker = symbol + ".NS"
-        st.write(f"🔍 Testing {ticker}")
-
         price_df = get_price_data(ticker)
         if price_df is None or len(price_df) < 20:
-            st.warning(f"❌ Skipping {ticker} – No or insufficient data.")
+            # Skip silently without warnings
             continue
 
         triggers = analyze_triggers(price_df)
         if triggers:
-            st.success(f"✅ {symbol}: {triggers['BUY']} / {triggers['SELL 30% Profit']} / {triggers['SELL All']}")
             results.append({
                 "Stock": symbol,
                 **triggers
             })
-        else:
-            st.warning(f"⚠️ Could not analyze triggers for {symbol}")
 
     if results:
         st.subheader("📊 Trigger Summary Table")
