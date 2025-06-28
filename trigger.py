@@ -1,81 +1,75 @@
 import pandas as pd
-import yfinance as yf
-import time
-
-
-def get_price_data(ticker, max_retries=3, sleep_sec=1):
-    ticker_full = ticker if ticker.endswith('.NS') else ticker + '.NS'
-    df = None
-
-    for attempt in range(max_retries):
-        try:
-            print(f"🔄 Fetching data for {ticker_full} (Attempt {attempt+1})")
-            df = yf.download(ticker_full, period="6mo", progress=False)
-
-            if not df.empty:
-                print(f"✅ Data fetched: {len(df)} rows")
-                break
-        except Exception as e:
-            print(f"⚠️ Error fetching {ticker_full}: {e}")
-        time.sleep(sleep_sec)
-
-    if df is None or df.empty:
-        print(f"❌ No data found for {ticker_full}")
-        return None
-
-    # Fix: Flatten MultiIndex columns properly by taking the first level (Open, Close, etc.)
-    if isinstance(df.columns, pd.MultiIndex):
-        print("Columns before flattening:", df.columns)
-        df.columns = df.columns.get_level_values(0)
-        print("Columns after flattening:", df.columns)
-
-    df = df.rename(columns=lambda x: str(x).strip())
-
-    return df
-
 
 def analyze_triggers(df):
     try:
-        required_cols = ['Open', 'Close']
+        required_cols = ['Open', 'Close', 'Low']
         if not all(col in df.columns for col in required_cols):
-            print(f"❌ Missing required columns. Found columns: {list(df.columns)}")
+            print(f"❌ Required columns missing: {df.columns}")
             return None
 
-        if len(df) < 5:
-            print("❌ Not enough data")
+        if len(df) < 20:  # Need at least 50 for EMA 50 but we can adjust
+            print("❌ Not enough data for analysis")
             return None
 
-        base_price = df['Open'].iloc[0]
-        current_price = df['Close'].iloc[-1]
-        is_green = current_price > base_price
+        base_price = df['Open'].iloc[0]  # Listing Price
+        ltp = df['Close'].iloc[-1]  # Last traded price
+
+        # Calculate EMA20 and EMA50
+        df['EMA20'] = df['Close'].ewm(span=20, adjust=False).mean()
+        df['EMA50'] = df['Close'].ewm(span=50, adjust=False).mean()
+
+        # Find the lowest price dip below base price by at least 5%
+        dip_threshold = base_price * 0.95
+        dips = df[df['Low'] < dip_threshold]
+
+        # Check if U-curve formed:
+        # 1) Price dipped at least 5% below base price
+        # 2) Then price crossed back above base price (Close > base_price)
+        u_curve_detected = False
+        sessions_to_u_curve = None
+        percent_dip = None
+
+        if not dips.empty:
+            min_low = dips['Low'].min()
+            percent_dip = round((min_low - base_price) / base_price * 100, 2)
+
+            # Find session of min dip and first session after dip crossing base price
+            dip_idx = dips['Low'].idxmin()
+            # Find first Close > base_price after dip_idx
+            after_dip = df.loc[dip_idx:]
+            cross_idx = after_dip[after_dip['Close'] > base_price].index.min()
+
+            if pd.notna(cross_idx):
+                u_curve_detected = True
+                sessions_to_u_curve = (cross_idx - df.index[0]).days if isinstance(cross_idx, pd.Timestamp) else cross_idx - dip_idx
+
+        buy_signal = u_curve_detected and (ltp > base_price)
+
+        # SELL logic after buy:
+        # If bought (buy_signal == True)
+        # SELL 30% profit if price goes below EMA20 after buy
+        # SELL all if price goes below EMA50
+        sell_signal = False
+        sell_all_signal = False
+        if buy_signal:
+            if ltp < df['EMA20'].iloc[-1]:
+                sell_signal = True
+            if ltp < df['EMA50'].iloc[-1]:
+                sell_all_signal = True
 
         return {
             "Listing Price": round(base_price, 2),
-            "Current Price": round(current_price, 2),
-            "Trigger": "🟢 Green" if is_green else "🔴 Red"
+            "LTP": round(ltp, 2),
+            "U-Curve": "✅" if u_curve_detected else "❌",
+            "# Sessions U-Curve": sessions_to_u_curve if sessions_to_u_curve is not None else "-",
+            "% Dip": percent_dip if percent_dip is not None else "-",
+            "BUY": "✅" if buy_signal else "❌",
+            "EMA20": round(df['EMA20'].iloc[-1], 2),
+            "EMA50": round(df['EMA50'].iloc[-1], 2),
+            "SELL 30% Profit": "✅" if sell_signal else "❌",
+            "SELL All": "✅" if sell_all_signal else "❌"
         }
 
     except Exception as e:
         print(f"⚠️ Trigger analysis failed: {e}")
         return None
-
-
-# Debug run
-if __name__ == "__main__":
-    test_tickers = ["ACMESOLAR.NS", "DENTA.NS", "RELIANCE.NS"]
-
-    for ticker in test_tickers:
-        print(f"\n🔍 Testing {ticker}")
-        df = get_price_data(ticker)
-        if df is None:
-            print(f"❌ Skipping {ticker} – No data")
-            continue
-
-        print(f"📊 Last 3 rows for {ticker}")
-        print(df.tail(3))
-
-        triggers = analyze_triggers(df)
-        if triggers:
-            print(f"✅ Trigger result for {ticker}: {triggers}")
-        else:
-            print(f"⚠️ Could not analyze triggers for {ticker}")
