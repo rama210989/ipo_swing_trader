@@ -2,6 +2,7 @@ import pandas as pd
 import yfinance as yf
 import time
 
+
 def get_price_data(ticker, max_retries=3, sleep_sec=1):
     ticker_full = ticker if ticker.endswith('.NS') else ticker + '.NS'
     df = None
@@ -9,43 +10,39 @@ def get_price_data(ticker, max_retries=3, sleep_sec=1):
     for attempt in range(max_retries):
         try:
             print(f"🔄 Fetching data for {ticker_full} (Attempt {attempt+1})")
-            df = yf.download(ticker_full, period="6mo", progress=False, auto_adjust=False)
-            
-            if df is not None and not df.empty:
+            df = yf.download(ticker_full, period="6mo", progress=False)
+
+            if not df.empty:
                 print(f"✅ Data fetched: {len(df)} rows")
-                # Debug: print columns received
-                print(f"Columns before flattening: {df.columns}")
-
-                # Flatten MultiIndex columns if present
-                if isinstance(df.columns, pd.MultiIndex):
-                    df.columns = df.columns.get_level_values(-1)
-                    print(f"Columns after flattening: {df.columns}")
-
-                # Strip column names
-                df.columns = [str(col).strip() for col in df.columns]
-
-                return df
-            else:
-                print(f"⚠️ Empty DataFrame for {ticker_full}")
+                break
         except Exception as e:
             print(f"⚠️ Error fetching {ticker_full}: {e}")
-
         time.sleep(sleep_sec)
 
-    print(f"❌ Failed to fetch data for {ticker_full} after {max_retries} attempts.")
-    return None
+    if df is None or df.empty:
+        print(f"❌ No data found for {ticker_full}")
+        return None
+
+    # Fix: Flatten MultiIndex columns properly by taking the first level (Open, Close, etc.)
+    if isinstance(df.columns, pd.MultiIndex):
+        print("Columns before flattening:", df.columns)
+        df.columns = df.columns.get_level_values(0)
+        print("Columns after flattening:", df.columns)
+
+    df = df.rename(columns=lambda x: str(x).strip())
+
+    return df
+
 
 def analyze_triggers(df):
     try:
         required_cols = ['Open', 'Close']
-        print(f"Analyzing DataFrame columns: {df.columns}")
-
         if not all(col in df.columns for col in required_cols):
             print(f"❌ Missing required columns. Found columns: {list(df.columns)}")
             return None
 
         if len(df) < 5:
-            print(f"❌ Not enough data. Only {len(df)} rows available.")
+            print("❌ Not enough data")
             return None
 
         base_price = df['Open'].iloc[0]
@@ -59,10 +56,11 @@ def analyze_triggers(df):
         }
 
     except Exception as e:
-        print(f"⚠️ Trigger analysis error: {e}")
+        print(f"⚠️ Trigger analysis failed: {e}")
         return None
 
-# For debugging in terminal or Colab
+
+# Debug run
 if __name__ == "__main__":
     test_tickers = ["ACMESOLAR.NS", "DENTA.NS", "RELIANCE.NS"]
 
