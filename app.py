@@ -34,13 +34,13 @@ if st.button("🚀 Run Trigger Analysis"):
         st.write(f"🔍 Testing {ticker}")
 
         price_df = get_price_data(ticker)
-        if price_df is None or len(price_df) < 5:
+        if price_df is None or len(price_df) < 20:
             st.warning(f"❌ Skipping {ticker} – No or insufficient data.")
             continue
 
         triggers = analyze_triggers(price_df)
         if triggers:
-            st.success(f"✅ {symbol}: {triggers['Trigger']}")
+            st.success(f"✅ {symbol}: {triggers['BUY']} / {triggers['SELL 30% Profit']} / {triggers['SELL All']}")
             results.append({
                 "Stock": symbol,
                 **triggers
@@ -51,5 +51,19 @@ if st.button("🚀 Run Trigger Analysis"):
     if results:
         st.subheader("📊 Trigger Summary Table")
         st.dataframe(pd.DataFrame(results))
+
+        st.markdown("""
+        ### 📖 Explanation of Columns:
+        - **Listing Price:** IPO day 1 open price (base price)
+        - **LTP:** Last traded closing price
+        - **U-Curve:** Detected if price dipped 5%+ below base price then crossed above base price
+        - **# Sessions U-Curve:** Trading sessions taken to complete U-curve
+        - **% Dip:** Lowest price % difference vs base price (negative means dip)
+        - **BUY:** Signal to buy when U-curve detected and price crosses base price
+        - **EMA20:** 20-day Exponential Moving Average of closing price
+        - **EMA50:** 50-day Exponential Moving Average of closing price
+        - **SELL 30% Profit:** Sell signal if price drops below EMA20 after buy (book profit)
+        - **SELL All:** Sell all if price drops below EMA50 (stop loss)
+        """)
     else:
         st.info("⚠️ No triggers identified.")
