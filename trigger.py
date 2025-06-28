@@ -43,8 +43,16 @@ def analyze_triggers(df):
             print("❌ Not enough data for analysis")
             return None
 
-        # ✅ Use Day 1 high as the base price
-        base_price = df['High'].iloc[0]  # Highest price on IPO day
+        # Ensure DataFrame index is datetime
+        if not pd.api.types.is_datetime64_any_dtype(df.index):
+            df.index = pd.to_datetime(df.index)
+
+        # Filter valid rows with non-null and positive High values
+        df_valid = df[df['High'].notna() & (df['High'] > 0)]
+
+        # Use Day 1 high as base price and get listing date
+        base_price = df_valid['High'].iloc[0]
+        listing_date = df_valid.index[0].strftime('%Y-%m-%d')
 
         ltp = df['Close'].iloc[-1]  # Last traded price
 
@@ -85,6 +93,7 @@ def analyze_triggers(df):
 
         return {
             "Listing Price": round(base_price, 2),
+            "Listing Date": listing_date,
             "LTP": round(ltp, 2),
             "U-Curve": "✅" if u_curve_detected else "❌",
             "# Sessions U-Curve": sessions_to_u_curve if sessions_to_u_curve is not None else "-",
