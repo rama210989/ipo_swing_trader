@@ -1,5 +1,4 @@
 import pandas as pd
-
 def analyze_triggers(df):
     try:
         required_cols = ['Open', 'Close', 'Low']
