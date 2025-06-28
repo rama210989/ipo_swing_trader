@@ -1,4 +1,36 @@
 import pandas as pd
+import yfinance as yf
+import time
+
+def get_price_data(ticker, max_retries=3, sleep_sec=1):
+    ticker_full = ticker if ticker.endswith('.NS') else ticker + '.NS'
+    df = None
+
+    for attempt in range(max_retries):
+        try:
+            print(f"🔄 Fetching data for {ticker_full} (Attempt {attempt+1})")
+            df = yf.download(ticker_full, period="6mo", progress=False)
+            if not df.empty:
+                print(f"✅ Data fetched: {len(df)} rows")
+                break
+        except Exception as e:
+            print(f"⚠️ Error fetching {ticker_full}: {e}")
+        time.sleep(sleep_sec)
+
+    if df is None or df.empty:
+        print(f"❌ No data found for {ticker_full}")
+        return None
+
+    # Flatten MultiIndex columns if present (yfinance often returns MultiIndex)
+    if isinstance(df.columns, pd.MultiIndex):
+        print(f"Columns before flattening: {df.columns}")
+        df.columns = df.columns.get_level_values(0)  # Take first level like 'Open', 'Close' etc.
+        print(f"Columns after flattening: {df.columns}")
+
+    df = df.rename(columns=lambda x: str(x).strip())
+    return df
+
+
 def analyze_triggers(df):
     try:
         required_cols = ['Open', 'Close', 'Low']
@@ -6,7 +38,7 @@ def analyze_triggers(df):
             print(f"❌ Required columns missing: {df.columns}")
             return None
 
-        if len(df) < 20:  # Need at least 50 for EMA 50 but we can adjust
+        if len(df) < 20:  # Need at least 20 days for EMA20, ideally 50 for EMA50
             print("❌ Not enough data for analysis")
             return None
 
@@ -32,22 +64,18 @@ def analyze_triggers(df):
             min_low = dips['Low'].min()
             percent_dip = round((min_low - base_price) / base_price * 100, 2)
 
-            # Find session of min dip and first session after dip crossing base price
             dip_idx = dips['Low'].idxmin()
-            # Find first Close > base_price after dip_idx
             after_dip = df.loc[dip_idx:]
             cross_idx = after_dip[after_dip['Close'] > base_price].index.min()
 
             if pd.notna(cross_idx):
                 u_curve_detected = True
-                sessions_to_u_curve = (cross_idx - df.index[0]).days if isinstance(cross_idx, pd.Timestamp) else cross_idx - dip_idx
+                # Calculate sessions to u-curve as number of trading days between dip and crossing
+                sessions_to_u_curve = df.index.get_loc(cross_idx) - df.index.get_loc(dip_idx)
 
         buy_signal = u_curve_detected and (ltp > base_price)
 
         # SELL logic after buy:
-        # If bought (buy_signal == True)
-        # SELL 30% profit if price goes below EMA20 after buy
-        # SELL all if price goes below EMA50
         sell_signal = False
         sell_all_signal = False
         if buy_signal:
@@ -72,3 +100,14 @@ def analyze_triggers(df):
     except Exception as e:
         print(f"⚠️ Trigger analysis failed: {e}")
         return None
+
+
+# Debug test (optional, remove before pushing if you want)
+if __name__ == "__main__":
+    tickers = ["ACMESOLAR.NS", "RELIANCE.NS"]
+    for t in tickers:
+        df = get_price_data(t)
+        if df is not None:
+            print(analyze_triggers(df))
+        else:
+            print(f"No data for {t}")
