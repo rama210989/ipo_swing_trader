@@ -2,7 +2,6 @@ import pandas as pd
 import yfinance as yf
 import time
 
-
 def get_price_data(ticker, max_retries=3, sleep_sec=1):
     ticker_full = ticker if ticker.endswith('.NS') else ticker + '.NS'
     df = None
@@ -10,37 +9,43 @@ def get_price_data(ticker, max_retries=3, sleep_sec=1):
     for attempt in range(max_retries):
         try:
             print(f"🔄 Fetching data for {ticker_full} (Attempt {attempt+1})")
-            df = yf.download(ticker_full, period="6mo", progress=False)
-
-            if not df.empty:
+            df = yf.download(ticker_full, period="6mo", progress=False, auto_adjust=False)
+            
+            if df is not None and not df.empty:
                 print(f"✅ Data fetched: {len(df)} rows")
-                break
+                # Debug: print columns received
+                print(f"Columns before flattening: {df.columns}")
+
+                # Flatten MultiIndex columns if present
+                if isinstance(df.columns, pd.MultiIndex):
+                    df.columns = df.columns.get_level_values(-1)
+                    print(f"Columns after flattening: {df.columns}")
+
+                # Strip column names
+                df.columns = [str(col).strip() for col in df.columns]
+
+                return df
+            else:
+                print(f"⚠️ Empty DataFrame for {ticker_full}")
         except Exception as e:
             print(f"⚠️ Error fetching {ticker_full}: {e}")
+
         time.sleep(sleep_sec)
 
-    if df is None or df.empty:
-        print(f"❌ No data found for {ticker_full}")
-        return None
-
-    # Fix: Flatten MultiIndex columns (if any) to get actual OHLCV columns
-    if isinstance(df.columns, pd.MultiIndex):
-        df.columns = df.columns.get_level_values(1)
-    else:
-        df.columns = [str(col).strip() for col in df.columns]
-
-    return df
-
+    print(f"❌ Failed to fetch data for {ticker_full} after {max_retries} attempts.")
+    return None
 
 def analyze_triggers(df):
     try:
         required_cols = ['Open', 'Close']
+        print(f"Analyzing DataFrame columns: {df.columns}")
+
         if not all(col in df.columns for col in required_cols):
-            print(f"❌ Required columns missing: {df.columns}")
+            print(f"❌ Missing required columns. Found columns: {list(df.columns)}")
             return None
 
         if len(df) < 5:
-            print("❌ Not enough data")
+            print(f"❌ Not enough data. Only {len(df)} rows available.")
             return None
 
         base_price = df['Open'].iloc[0]
@@ -54,11 +59,10 @@ def analyze_triggers(df):
         }
 
     except Exception as e:
-        print(f"⚠️ Trigger analysis failed: {e}")
+        print(f"⚠️ Trigger analysis error: {e}")
         return None
 
-
-# DEBUG MODE: Optional test block if you want to test this script standalone
+# For debugging in terminal or Colab
 if __name__ == "__main__":
     test_tickers = ["ACMESOLAR.NS", "DENTA.NS", "RELIANCE.NS"]
 
