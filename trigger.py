@@ -23,20 +23,27 @@ def get_price_data(ticker, max_retries=3, sleep_sec=1):
         print(f"❌ No data found for {ticker_full}")
         return None
 
-    # Fix multi-index column if any (common in yfinance updates)
+    # FIX: Flatten column names
     if isinstance(df.columns, pd.MultiIndex):
-        df.columns = df.columns.get_level_values(-1)
+        df.columns = df.columns.get_level_values(1)  # Take "Open", "Close" etc.
+
+    df = df.rename(columns=lambda x: str(x).strip())
 
     return df
 
 
 def analyze_triggers(df):
     try:
+        required_cols = ['Open', 'Close']
+        if not all(col in df.columns for col in required_cols):
+            print(f"❌ Required columns missing: {df.columns}")
+            return None
+
         if len(df) < 5:
             print("❌ Not enough data")
             return None
 
-        # Basic trigger logic: check if current Close > first Open (listing price)
+        # Trigger logic
         base_price = df['Open'].iloc[0]
         current_price = df['Close'].iloc[-1]
         is_green = current_price > base_price
