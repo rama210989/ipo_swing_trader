@@ -43,7 +43,8 @@ def analyze_triggers(df):
             print("❌ Not enough data for analysis")
             return None
 
-        base_price = df['Open'].iloc[0]  # Listing Price
+        base_price = max(df['Open'].iloc[0], df['Close'].iloc[0])  # Listing Price = max(Open, Close) Day 1
+
         ltp = df['Close'].iloc[-1]  # Last traded price
 
         # Calculate EMA20 and EMA50
