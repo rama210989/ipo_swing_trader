@@ -23,18 +23,43 @@ def get_price_data(ticker, max_retries=3, sleep_sec=1):
     if isinstance(df.columns, pd.MultiIndex):
         df.columns = df.columns.get_level_values(-1)
 
+    print(f"Columns fetched: {df.columns.tolist()}")
     return df
 
 def analyze_triggers(df):
-    # Basic validation
-    if len(df) < 30 or 'Open' not in df.columns or 'Close' not in df.columns:
-        print("❌ Insufficient data or required columns missing.")
+    print("Analyzing triggers...")
+
+    # Check data length
+    if len(df) < 30:
+        print(f"❌ Data length too short: {len(df)} rows")
         return None
 
-    base_price = float(df['Open'].iloc[0])   # IPO opening price
-    latest_close = float(df['Close'].iloc[-1])  # Latest close price
+    # Check required columns
+    required_cols = ['Open', 'Close']
+    for col in required_cols:
+        if col not in df.columns:
+            print(f"❌ Missing required column: {col}")
+            return None
 
-    trigger = latest_close > base_price  # True if current price is above opening price
+    # Check if values are non-null and numeric
+    if df['Open'].isnull().all():
+        print("❌ 'Open' column is all nulls")
+        return None
+    if df['Close'].isnull().all():
+        print("❌ 'Close' column is all nulls")
+        return None
+
+    try:
+        base_price = float(df['Open'].iloc[0])   # IPO opening price
+        latest_close = float(df['Close'].iloc[-1])  # Latest close price
+    except Exception as e:
+        print(f"❌ Error converting prices to float: {e}")
+        return None
+
+    print(f"Base price (IPO open): {base_price}")
+    print(f"Latest close price: {latest_close}")
+
+    trigger = latest_close > base_price
 
     return {
         "Base Price": round(base_price, 2),
