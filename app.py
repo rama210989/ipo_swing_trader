@@ -46,7 +46,23 @@ with tab1:
 
         if results:
             st.subheader("📊 Trigger Summary Table")
-            st.dataframe(pd.DataFrame(results))
+            result_df = pd.DataFrame(results).astype(str)  # ✅ Avoid ArrowTypeError
+            st.dataframe(result_df)
+
+            st.markdown("""
+            ### 📖 Explanation of Columns:
+            - **Listing Price:** IPO day 1 high price (base)
+            - **LTP:** Last traded price
+            - **U-Curve:** Dip 5% below base then recovery above base
+            - **# Sessions U-Curve:** Trading sessions to recover
+            - **% Dip:** Lowest % drop below base
+            - **BUY:** Price crossed above base after dip
+            - **Buying Date:** When base was crossed again
+            - **EMA20:** 20-day Exponential Moving Average
+            - **EMA50:** 50-day Exponential Moving Average
+            - **SELL 30% Profit:** Triggered when price drops below EMA20
+            - **SELL All:** Triggered when price drops below EMA50
+            """)
         else:
             st.info("⚠️ No triggers identified.")
 
@@ -129,7 +145,6 @@ with tab2:
 
         final_upside = ((total_return - investment) / investment * 100) if buy_price else "-"
 
-        # Summary Table
         st.markdown("### 💹 Trade Summary")
         summary = {
             "Listing Date": listing_date.strftime('%Y-%m-%d'),
