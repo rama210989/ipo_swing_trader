@@ -25,43 +25,59 @@ with tab1:
         df['Volume'] = df['Volume'].str.replace(',', '', regex=False).astype(int)
         return df
 
-    df = load_ipo_csv(csv_url)
+    ipo_df = load_ipo_csv(csv_url)
 
     st.subheader("📋 IPO List")
-    st.dataframe(df[['Stock Name', 'Symbol', '% Chg', 'Price', 'Volume']])
+    st.dataframe(ipo_df[['Stock Name', 'Symbol', '% Chg', 'Price', 'Volume']])
 
     if st.button("🚀 Run Trigger Analysis"):
         results = []
-        for symbol in df['Symbol']:
+        for idx, row in ipo_df.iterrows():
+            symbol = row['Symbol']
             ticker = symbol + ".NS"
             price_df = get_price_data(ticker)
             if price_df is None or len(price_df) < 20:
                 continue
             triggers = analyze_triggers(price_df)
             if triggers:
-                results.append({
-                    "Stock": symbol,
-                    **triggers
-                })
+                triggers['Stock Name'] = row['Stock Name']
+                results.append(triggers)
 
         if results:
             st.subheader("📊 Trigger Summary Table")
-            result_df = pd.DataFrame(results).astype(str)  # ✅ Avoid ArrowTypeError
-            st.dataframe(result_df)
+            res_df = pd.DataFrame(results)
 
+            # Rename columns for better display
+            res_df = res_df.rename(columns={
+                "% dip from base price": "% Dip from Base Price",
+                "Max upside (%)": "Max Upside (%)",
+                "# sessions to max upside": "Sessions to Max Upside",
+                "# sessions in u-curve": "Sessions in U-Curve",
+                "Price at which sold 30%": "Price at Sold 30%",
+                "Price at which sold all": "Price at Sold All",
+                "% upside while selling 30%": "% Upside Selling 30%",
+                "% upside while selling all": "% Upside Selling All"
+            })
+
+            st.dataframe(res_df)
             st.markdown("""
             ### 📖 Explanation of Columns:
             - **Listing Price:** IPO day 1 high price (base)
+            - **Listing Date:** Date of IPO listing (first trading day)
             - **LTP:** Last traded price
-            - **U-Curve:** Dip 5% below base then recovery above base
-            - **# Sessions U-Curve:** Trading sessions to recover
-            - **% Dip:** Lowest % drop below base
-            - **BUY:** Price crossed above base after dip
-            - **Buying Date:** When base was crossed again
-            - **EMA20:** 20-day Exponential Moving Average
-            - **EMA50:** 50-day Exponential Moving Average
-            - **SELL 30% Profit:** Triggered when price drops below EMA20
-            - **SELL All:** Triggered when price drops below EMA50
+            - **U-curve:** Price dipped 5% below base and then recovered above base
+            - **Sessions in U-Curve:** Number of sessions to complete U-curve
+            - **% Dip from Base Price:** Max % dip below listing price
+            - **BUY:** Signal when price crossed above base after dip
+            - **Buying Date:** Date when buy signal triggered
+            - **EMA 20 / EMA 50:** Exponential moving averages
+            - **Max Upside (%):** Max % increase from base price
+            - **Sessions to Max Upside:** Sessions taken to reach max price
+            - **Sell 30 %:** Signal triggered when price drops below EMA20 after buy
+            - **Price at Sold 30%:** Price when selling 30%
+            - **Sell all:** Signal triggered when price drops below EMA50 after buy
+            - **Price at Sold All:** Price when selling all shares
+            - **% Upside Selling 30% / All:** % returns at sell points
             """)
         else:
             st.info("⚠️ No triggers identified.")
@@ -131,7 +147,7 @@ with tab2:
                 if sell_30_price and sell_all_price:
                     break
 
-        # Return Calculation
+        # Calculate returns
         if buy_price:
             if sell_30_price:
                 qty = 0.3 * shares_bought
