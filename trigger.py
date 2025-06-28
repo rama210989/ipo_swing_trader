@@ -1,31 +1,28 @@
 import pandas as pd
 import yfinance as yf
+from datetime import datetime, timedelta
 import time
 
-_cache = {}
-
 def get_price_data(ticker, days=180, max_retries=3, sleep_sec=1):
-    if ticker in _cache:
-        return _cache[ticker]
-
+    since = datetime.today() - timedelta(days=days)
+    df = None
     for attempt in range(max_retries):
         try:
-            df = yf.download(ticker + ".NS", period="6mo", progress=False)
-            if isinstance(df.columns, pd.MultiIndex):
-                df.columns = df.columns.get_level_values(1)
-
+            df = yf.download(ticker + ".NS", start=since.strftime("%Y-%m-%d"), progress=False)
             if not df.empty:
-                print(f"✅ Data fetched for {ticker}: {len(df)} rows, columns: {list(df.columns)}")
-                _cache[ticker] = df
-                return df
-            else:
-                print(f"⚠️ Empty data for {ticker}, retry {attempt + 1}")
-                time.sleep(sleep_sec)
+                break
         except Exception as e:
-            print(f"❌ Error fetching {ticker}: {e}")
-            time.sleep(sleep_sec)
-    print(f"❌ Failed to fetch data for {ticker} after {max_retries} retries")
-    return None
+            print(f"Error fetching {ticker}: {e}")
+        time.sleep(sleep_sec)
+    if df is None or df.empty:
+        print(f"❌ No data fetched for {ticker}")
+        return None
+
+    # Flatten multi-level columns if present
+    if isinstance(df.columns, pd.MultiIndex):
+        df.columns = df.columns.get_level_values(-1)
+
+    return df
 
 def analyze_triggers(df):
     if df is None:
@@ -36,20 +33,15 @@ def analyze_triggers(df):
     if len(df) < 30:
         print(f"❌ Data too short for analysis: {len(df)} rows")
         return None
-    if not required_cols.issubset(df.columns):
-        print(f"❌ Missing required columns for analysis. Columns found: {list(df.columns)}")
+
+    missing_cols = required_cols - set(df.columns)
+    if missing_cols:
+        print(f"❌ Missing required columns: {missing_cols}, Columns found: {list(df.columns)}")
         return None
 
     open_col = df['Open']
     low_col = df['Low']
     close_col = df['Close']
-
-    if isinstance(open_col, pd.DataFrame):
-        open_col = open_col.iloc[:, 0]
-    if isinstance(low_col, pd.DataFrame):
-        low_col = low_col.iloc[:, 0]
-    if isinstance(close_col, pd.DataFrame):
-        close_col = close_col.iloc[:, 0]
 
     base_price = float(open_col.iloc[0])
     min_low = float(low_col.min())
