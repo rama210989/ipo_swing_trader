@@ -1,68 +1,37 @@
-import pandas as pd
 import yfinance as yf
+import pandas as pd
 import time
 
 def get_price_data(ticker, max_retries=3, sleep_sec=1):
-    ticker_full = ticker if ticker.endswith('.NS') else ticker + '.NS'
     df = None
-    for attempt in range(max_retries):
+    for i in range(max_retries):
         try:
-            print(f"Fetching data for {ticker_full} (Attempt {attempt+1})")
-            df = yf.download(ticker_full, period="6mo", progress=False)
-            print(f"Rows fetched: {len(df)}")
+            df = yf.download(ticker, period="6mo", progress=False)
             if not df.empty:
-                break
+                if isinstance(df.columns, pd.MultiIndex):
+                    df.columns = df.columns.get_level_values(-1)
+                return df
         except Exception as e:
-            print(f"Error fetching {ticker_full}: {e}")
+            print(f"Error fetching {ticker}: {e}")
         time.sleep(sleep_sec)
+    return None
 
-    if df is None or df.empty:
-        print(f"❌ No data found for {ticker_full}")
-        return None
-
-    if isinstance(df.columns, pd.MultiIndex):
-        df.columns = df.columns.get_level_values(-1)
-
-    print(f"Columns fetched: {df.columns.tolist()}")
-    return df
-
-def analyze_triggers(df):
-    print("Analyzing triggers...")
-
-    # Check data length
-    if len(df) < 30:
-        print(f"❌ Data length too short: {len(df)} rows")
-        return None
-
-    # Check required columns
-    required_cols = ['Open', 'Close']
-    for col in required_cols:
-        if col not in df.columns:
-            print(f"❌ Missing required column: {col}")
+def analyze_trigger(df):
+    try:
+        # Clean-up
+        df = df.dropna(subset=["Open", "Close"])
+        if df.empty:
             return None
 
-    # Check if values are non-null and numeric
-    if df['Open'].isnull().all():
-        print("❌ 'Open' column is all nulls")
-        return None
-    if df['Close'].isnull().all():
-        print("❌ 'Close' column is all nulls")
-        return None
+        first_open = df['Open'].iloc[0]
+        last_close = df['Close'].iloc[-1]
+        trigger_flag = last_close > first_open
 
-    try:
-        base_price = float(df['Open'].iloc[0])   # IPO opening price
-        latest_close = float(df['Close'].iloc[-1])  # Latest close price
+        return {
+            "Listing Price (Open)": round(first_open, 2),
+            "Latest Close": round(last_close, 2),
+            "Trigger": "✅" if trigger_flag else "❌"
+        }
     except Exception as e:
-        print(f"❌ Error converting prices to float: {e}")
+        print(f"Error analyzing trigger: {e}")
         return None
-
-    print(f"Base price (IPO open): {base_price}")
-    print(f"Latest close price: {latest_close}")
-
-    trigger = latest_close > base_price
-
-    return {
-        "Base Price": round(base_price, 2),
-        "Latest Close": round(latest_close, 2),
-        "Trigger": "✅" if trigger else "❌"
-    }
