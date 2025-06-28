@@ -11,7 +11,7 @@ def get_price_data(ticker, max_retries=3, sleep_sec=1):
             print(f"🔄 Fetching data for {ticker_full} (Attempt {attempt+1})")
             # Fetch full available history
             df = yf.download(ticker_full, progress=False, period="max")
-            
+
             if not df.empty:
                 print(f"✅ Data fetched: {len(df)} rows")
                 break
@@ -23,11 +23,9 @@ def get_price_data(ticker, max_retries=3, sleep_sec=1):
         print(f"❌ No data found for {ticker_full}")
         return None
 
-    # Flatten MultiIndex columns if present (yfinance often returns MultiIndex)
+    # Flatten MultiIndex columns if present
     if isinstance(df.columns, pd.MultiIndex):
-        print(f"Columns before flattening: {df.columns}")
-        df.columns = df.columns.get_level_values(0)  # Take first level like 'Open', 'Close' etc.
-        print(f"Columns after flattening: {df.columns}")
+        df.columns = df.columns.get_level_values(0)
 
     df = df.rename(columns=lambda x: str(x).strip())
     return df
@@ -44,13 +42,14 @@ def analyze_triggers(df):
             print("❌ Not enough data for analysis")
             return None
 
-        # Get listing (IPO) date and base price = highest price on first available day
-        listing_date = df.index.min().strftime('%Y-%m-%d')  # first available date in data
-        base_price = df.loc[df.index.min(), 'High']
+        # Use the actual first date from the data
+        first_date = df.index.min()
+        listing_date = first_date.strftime('%Y-%m-%d')
+        base_price = df.loc[first_date, 'High']  # IPO day high
 
         ltp = df['Close'].iloc[-1]
 
-        # Calculate EMA20 and EMA50
+        # Calculate EMAs
         df['EMA20'] = df['Close'].ewm(span=20, adjust=False).mean()
         df['EMA50'] = df['Close'].ewm(span=50, adjust=False).mean()
 
@@ -60,6 +59,7 @@ def analyze_triggers(df):
         u_curve_detected = False
         sessions_to_u_curve = None
         percent_dip = None
+        cross_idx = None
 
         if not dips.empty:
             min_low = dips['Low'].min()
@@ -67,9 +67,10 @@ def analyze_triggers(df):
 
             dip_idx = dips['Low'].idxmin()
             after_dip = df.loc[dip_idx:]
-            cross_idx = after_dip[after_dip['Close'] > base_price].index.min()
+            cross_row = after_dip[after_dip['Close'] > base_price]
 
-            if pd.notna(cross_idx):
+            if not cross_row.empty:
+                cross_idx = cross_row.index.min()
                 u_curve_detected = True
                 sessions_to_u_curve = df.index.get_loc(cross_idx) - df.index.get_loc(dip_idx)
 
@@ -90,8 +91,8 @@ def analyze_triggers(df):
             "U-Curve": "✅" if u_curve_detected else "❌",
             "# Sessions U-Curve": sessions_to_u_curve if sessions_to_u_curve is not None else "-",
             "% Dip": percent_dip if percent_dip is not None else "-",
-            "BUY": "✅" if buy_signal else "❌",
             "Buying Date": cross_idx.strftime('%Y-%m-%d') if pd.notna(cross_idx) else "-",
+            "BUY": "✅" if buy_signal else "❌",
             "EMA20": round(df['EMA20'].iloc[-1], 2),
             "EMA50": round(df['EMA50'].iloc[-1], 2),
             "SELL 30% Profit": "✅" if sell_signal else "❌",
@@ -103,7 +104,7 @@ def analyze_triggers(df):
         return None
 
 
-# Example debug run - Remove or comment this out in production
+# Debug mode - Example usage
 if __name__ == "__main__":
     tickers = ["ACMESOLAR.NS", "RELIANCE.NS"]
     for t in tickers:
