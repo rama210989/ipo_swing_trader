@@ -6,7 +6,6 @@ st.set_page_config(layout="wide")
 st.title("📈 Recent IPOs - Swing Trade Monitor")
 st.markdown("*Data from Chartink screener: [IPO 365 by @finallynitin](https://chartink.com/screener/ipo-365-atfinallynitin)*")
 
-# CSV URL
 csv_url = "https://raw.githubusercontent.com/rama210989/ipo_swing_trader/refs/heads/main/IPO%20365%20finallynitin%2C%20Technical%20Analysis%20Scanner.csv"
 
 @st.cache_data
@@ -27,7 +26,7 @@ if st.button("Run Trigger Analysis"):
     st.subheader("🔎 Debug Output")
     results = []
     for symbol in df['Symbol']:
-        ticker = symbol + ".NS"  # append suffix here
+        ticker = symbol if symbol.endswith('.NS') else symbol + ".NS"
         st.write(f"🔄 Checking {ticker}")
 
         hist_df = get_price_data(ticker)
