@@ -1,7 +1,8 @@
 import streamlit as st
 import pandas as pd
+import time
 from datetime import datetime, timedelta
-from trigger import get_price_data, analyze_triggers  # import your functions
+from trigger import get_price_data, analyze_triggers
 
 st.set_page_config(layout="wide")
 st.title("📈 Recent IPOs - Swing Trade Monitor")
@@ -42,19 +43,29 @@ filtered_df = df[
 
 results = []
 
+st.subheader("🔎 Debug Output")
+
 for symbol in filtered_df['Symbol'].unique():
+    st.write(f"🔄 Checking: `{symbol}`")
     hist_df = get_price_data(symbol)
+
     if hist_df is None or len(hist_df) < 30:
+        st.write(f"❌ Skipping `{symbol}` – No or insufficient data.")
         continue
 
     triggers = analyze_triggers(hist_df)
+
     if triggers is None:
+        st.write(f"⚠️ No triggers found for `{symbol}`.")
         continue
 
+    st.write(f"✅ Added `{symbol}` to results.")
     results.append({
         "Stock Name": symbol,
         **triggers
     })
+
+    time.sleep(1.2)  # delay to avoid yfinance rate limiting
 
 if results:
     results_df = pd.DataFrame(results)
