@@ -1,47 +1,50 @@
 import pandas as pd
 import yfinance as yf
-from datetime import datetime, timedelta
 import time
+from datetime import datetime, timedelta
 
-def get_price_data(ticker, days=180, max_retries=3, sleep_sec=1):
-    since = datetime.today() - timedelta(days=days)
+def get_price_data(ticker, max_retries=3, sleep_sec=1):
+    # Ensure ticker has .NS suffix
+    ticker_full = ticker if ticker.endswith('.NS') else ticker + '.NS'
     df = None
     for attempt in range(max_retries):
         try:
-            df = yf.download(ticker + ".NS", start=since.strftime("%Y-%m-%d"), progress=False)
+            print(f"Fetching data for {ticker_full} (Attempt {attempt+1})")
+            df = yf.download(ticker_full, period="6mo", progress=False)
+            print(f"Rows fetched: {len(df)}")
             if not df.empty:
                 break
         except Exception as e:
-            print(f"Error fetching {ticker}: {e}")
+            print(f"Error fetching {ticker_full}: {e}")
         time.sleep(sleep_sec)
+
     if df is None or df.empty:
-        print(f"❌ No data fetched for {ticker}")
+        print(f"❌ No data found for {ticker_full}")
         return None
 
-    # Flatten multi-level columns if present
+    # Flatten multi-index columns if any
     if isinstance(df.columns, pd.MultiIndex):
         df.columns = df.columns.get_level_values(-1)
 
     return df
 
 def analyze_triggers(df):
-    if df is None:
-        print("❌ analyze_triggers received None df")
-        return None
-
-    required_cols = {'Open', 'Low', 'Close'}
-    if len(df) < 30:
-        print(f"❌ Data too short for analysis: {len(df)} rows")
-        return None
-
-    missing_cols = required_cols - set(df.columns)
-    if missing_cols:
-        print(f"❌ Missing required columns: {missing_cols}, Columns found: {list(df.columns)}")
+    # Basic checks
+    if len(df) < 30 or 'Open' not in df.columns or 'Low' not in df.columns or 'Close' not in df.columns:
+        print("❌ Insufficient data or required columns missing.")
         return None
 
     open_col = df['Open']
     low_col = df['Low']
     close_col = df['Close']
+
+    # Handle multi-column DataFrame edge case
+    if isinstance(open_col, pd.DataFrame):
+        open_col = open_col.iloc[:, 0]
+    if isinstance(low_col, pd.DataFrame):
+        low_col = low_col.iloc[:, 0]
+    if isinstance(close_col, pd.DataFrame):
+        close_col = close_col.iloc[:, 0]
 
     base_price = float(open_col.iloc[0])
     min_low = float(low_col.min())
@@ -50,6 +53,7 @@ def analyze_triggers(df):
 
     u_curve_formed = dip_pct >= 5
 
+    # Compute EMAs on the close prices
     ema20 = close_col.ewm(span=20, adjust=False).mean()
     ema50 = close_col.ewm(span=50, adjust=False).mean()
 
@@ -84,6 +88,7 @@ def analyze_triggers(df):
             sell_30_trigger = last_close_post_buy < ema20_latest
             sell_all_trigger = last_close_post_buy < ema50_latest
 
+    # Convert to plain bool
     buy_trigger = bool(buy_trigger)
     sell_30_trigger = bool(sell_30_trigger)
     sell_all_trigger = bool(sell_all_trigger)
