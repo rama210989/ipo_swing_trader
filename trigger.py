@@ -9,7 +9,8 @@ def get_price_data(ticker, max_retries=3, sleep_sec=1):
     for attempt in range(max_retries):
         try:
             print(f"🔄 Fetching data for {ticker_full} (Attempt {attempt+1})")
-            df = yf.download(ticker_full, period="6mo", progress=False)
+            df = yf.download(ticker_full, progress=False)
+            
             if not df.empty:
                 print(f"✅ Data fetched: {len(df)} rows")
                 break
