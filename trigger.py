@@ -42,9 +42,10 @@ def analyze_triggers(df):
             print("❌ Not enough data for analysis")
             return None
 
-        # Explicitly get base price and listing date from first row (IPO day)
-        base_price = df.head(1)['High'].values[0]
-        listing_date = df.head(1).index[0].strftime('%Y-%m-%d')
+        # Use the first available date (IPO day)
+        ipo_day = df.index.min()
+        base_price = df.loc[ipo_day, 'High']
+        listing_date = ipo_day.strftime('%Y-%m-%d')
 
         ltp = df['Close'].iloc[-1]
 
