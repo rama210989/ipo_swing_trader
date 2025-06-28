@@ -23,11 +23,11 @@ def get_price_data(ticker, max_retries=3, sleep_sec=1):
         print(f"❌ No data found for {ticker_full}")
         return None
 
-    # FIX: Flatten column names
+    # Fix: Flatten MultiIndex columns (if any) to get actual OHLCV columns
     if isinstance(df.columns, pd.MultiIndex):
-        df.columns = df.columns.get_level_values(1)  # Take "Open", "Close" etc.
-
-    df = df.rename(columns=lambda x: str(x).strip())
+        df.columns = df.columns.get_level_values(1)
+    else:
+        df.columns = [str(col).strip() for col in df.columns]
 
     return df
 
@@ -43,7 +43,6 @@ def analyze_triggers(df):
             print("❌ Not enough data")
             return None
 
-        # Trigger logic
         base_price = df['Open'].iloc[0]
         current_price = df['Close'].iloc[-1]
         is_green = current_price > base_price
@@ -59,7 +58,7 @@ def analyze_triggers(df):
         return None
 
 
-# 🔬 DEBUG MODE FOR COLAB OR TERMINAL
+# DEBUG MODE: Optional test block if you want to test this script standalone
 if __name__ == "__main__":
     test_tickers = ["ACMESOLAR.NS", "DENTA.NS", "RELIANCE.NS"]
 
