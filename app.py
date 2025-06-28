@@ -6,74 +6,45 @@ st.set_page_config(layout="wide")
 st.title("📈 Recent IPOs - Swing Trade Monitor")
 st.markdown("*Data from Chartink screener: [IPO 365 by @finallynitin](https://chartink.com/screener/ipo-365-atfinallynitin)*")
 
-# CSV from GitHub
+# CSV URL
 csv_url = "https://raw.githubusercontent.com/rama210989/ipo_swing_trader/refs/heads/main/IPO%20365%20finallynitin%2C%20Technical%20Analysis%20Scanner.csv"
 
 @st.cache_data
 def load_ipo_csv(url):
     df = pd.read_csv(url)
-    # Clean up columns
     df.columns = [col.strip().replace('"', '') for col in df.columns]
     df['% Chg'] = df['% Chg'].str.replace('%', '', regex=False).astype(float)
     df['Price'] = df['Price'].astype(float)
     df['Volume'] = df['Volume'].str.replace(',', '', regex=False).astype(int)
     return df
 
-# Load full data
 df = load_ipo_csv(csv_url)
 
-# Show full IPO list in a neat table
-st.subheader("📋 Full IPO List")
+st.subheader("📋 IPO List")
 st.dataframe(df[['Stock Name', 'Symbol', '% Chg', 'Price', 'Volume']])
 
-# Filters (optional, but keep for your use)
-chg_filter = st.slider(
-    "% Change filter",
-    float(df['% Chg'].min()),
-    float(df['% Chg'].max()),
-    (float(df['% Chg'].min()), float(df['% Chg'].max()))
-)
-price_filter = st.slider(
-    "Price filter",
-    float(df['Price'].min()),
-    float(df['Price'].max()),
-    (float(df['Price'].min()), float(df['Price'].max()))
-)
-
-# Filter the DataFrame based on sliders
-filtered_df = df[
-    (df['% Chg'] >= chg_filter[0]) & (df['% Chg'] <= chg_filter[1]) &
-    (df['Price'] >= price_filter[0]) & (df['Price'] <= price_filter[1])
-]
-
-st.subheader(f"Filtered IPO List ({len(filtered_df)})")
-st.dataframe(filtered_df[['Stock Name', 'Symbol', '% Chg', 'Price', 'Volume']])
-
-# Button to trigger analysis
 if st.button("Run Trigger Analysis"):
+    st.subheader("🔎 Debug Output")
     results = []
-
-    progress_bar = st.progress(0)
-    total = len(filtered_df)
-    for i, symbol in enumerate(filtered_df['Symbol']):
-        ticker = symbol + ".NS"
+    for symbol in df['Symbol']:
+        ticker = symbol + ".NS"  # append suffix here
         st.write(f"🔄 Checking {ticker}")
 
-        hist_df = get_price_data(symbol)
+        hist_df = get_price_data(ticker)
         if hist_df is None or len(hist_df) < 30:
-            st.write(f"❌ Skipping {symbol} – No or insufficient data.")
+            st.warning(f"❌ Skipping {ticker} – No or insufficient data.")
             continue
 
         triggers = analyze_triggers(hist_df)
         if triggers is None:
-            st.write(f"⚠️ Could not analyze triggers for {symbol}")
+            st.warning(f"⚠️ Could not analyze triggers for {ticker}")
             continue
 
+        st.success(f"✅ Data found and triggers analyzed for {ticker}")
         results.append({
             "Stock Name": symbol,
             **triggers
         })
-        progress_bar.progress((i+1)/total)
 
     if results:
         results_df = pd.DataFrame(results)
