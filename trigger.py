@@ -91,6 +91,7 @@ def analyze_triggers(df):
             "# Sessions U-Curve": sessions_to_u_curve if sessions_to_u_curve is not None else "-",
             "% Dip": percent_dip if percent_dip is not None else "-",
             "BUY": "✅" if buy_signal else "❌",
+            "Buying Date": cross_idx.strftime('%Y-%m-%d') if pd.notna(cross_idx) else "-",
             "EMA20": round(df['EMA20'].iloc[-1], 2),
             "EMA50": round(df['EMA50'].iloc[-1], 2),
             "SELL 30% Profit": "✅" if sell_signal else "❌",
