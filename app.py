@@ -6,20 +6,27 @@ st.set_page_config(layout="wide")
 st.title("📈 Recent IPOs - Swing Trade Monitor")
 st.markdown("*Data from Chartink screener: [IPO 365 by @finallynitin](https://chartink.com/screener/ipo-365-atfinallynitin)*")
 
+# CSV from GitHub
 csv_url = "https://raw.githubusercontent.com/rama210989/ipo_swing_trader/refs/heads/main/IPO%20365%20finallynitin%2C%20Technical%20Analysis%20Scanner.csv"
 
 @st.cache_data
 def load_ipo_csv(url):
     df = pd.read_csv(url)
+    # Clean up columns
     df.columns = [col.strip().replace('"', '') for col in df.columns]
     df['% Chg'] = df['% Chg'].str.replace('%', '', regex=False).astype(float)
     df['Price'] = df['Price'].astype(float)
     df['Volume'] = df['Volume'].str.replace(',', '', regex=False).astype(int)
     return df
 
+# Load full data
 df = load_ipo_csv(csv_url)
 
-st.subheader("📋 IPO List with Filters")
+# Show full IPO list in a neat table
+st.subheader("📋 Full IPO List")
+st.dataframe(df[['Stock Name', 'Symbol', '% Chg', 'Price', 'Volume']])
+
+# Filters (optional, but keep for your use)
 chg_filter = st.slider(
     "% Change filter",
     float(df['% Chg'].min()),
@@ -33,36 +40,44 @@ price_filter = st.slider(
     (float(df['Price'].min()), float(df['Price'].max()))
 )
 
+# Filter the DataFrame based on sliders
 filtered_df = df[
     (df['% Chg'] >= chg_filter[0]) & (df['% Chg'] <= chg_filter[1]) &
     (df['Price'] >= price_filter[0]) & (df['Price'] <= price_filter[1])
 ]
 
-results = []
+st.subheader(f"Filtered IPO List ({len(filtered_df)})")
+st.dataframe(filtered_df[['Stock Name', 'Symbol', '% Chg', 'Price', 'Volume']])
 
-st.subheader("🔎 Debug Output")
+# Button to trigger analysis
+if st.button("Run Trigger Analysis"):
+    results = []
 
-for symbol in filtered_df['Symbol'].unique():
-    ticker = symbol + ".NS"
-    st.write(f"🔄 Checking {ticker}")
-    hist_df = get_price_data(symbol)
-    if hist_df is None or len(hist_df) < 30:
-        st.write(f"❌ Skipping {symbol} – No or insufficient data.")
-        continue
+    progress_bar = st.progress(0)
+    total = len(filtered_df)
+    for i, symbol in enumerate(filtered_df['Symbol']):
+        ticker = symbol + ".NS"
+        st.write(f"🔄 Checking {ticker}")
 
-    triggers = analyze_triggers(hist_df)
-    if triggers is None:
-        st.write(f"⚠️ Could not analyze triggers for {symbol}")
-        continue
+        hist_df = get_price_data(symbol)
+        if hist_df is None or len(hist_df) < 30:
+            st.write(f"❌ Skipping {symbol} – No or insufficient data.")
+            continue
 
-    results.append({
-        "Stock Name": symbol,
-        **triggers
-    })
+        triggers = analyze_triggers(hist_df)
+        if triggers is None:
+            st.write(f"⚠️ Could not analyze triggers for {symbol}")
+            continue
 
-if results:
-    results_df = pd.DataFrame(results)
-    st.subheader("📊 Trigger Table")
-    st.dataframe(results_df)
-else:
-    st.write("⚠️ No data available for the selected filters and symbols.")
+        results.append({
+            "Stock Name": symbol,
+            **triggers
+        })
+        progress_bar.progress((i+1)/total)
+
+    if results:
+        results_df = pd.DataFrame(results)
+        st.subheader("📊 Trigger Table")
+        st.dataframe(results_df)
+    else:
+        st.write("⚠️ No data available for the selected filters and symbols.")
