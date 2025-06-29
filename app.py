@@ -1,3 +1,5 @@
+# app.py
+
 import streamlit as st
 import pandas as pd
 from trigger import get_price_data, run_trigger_analysis
@@ -32,21 +34,29 @@ with tab1:
         if pd.notnull(latest_date):
             st.markdown(f"Latest IPO Opening Date: **{latest_date.strftime('%Y-%m-%d')}**")
 
+    # Show key IPO data with symbol
     st.dataframe(ipo_df[[
-        "Company Name", "Opening Date", "Listing Date", "Issue Price (Rs.)",
-        "Issue Amount (Rs.cr.)", "Listing at"
-    ]])
+        "Company Name", "Symbol", "Opening Date", "Listing Date", "Issue Price (Rs.)"
+    ]].sort_values("Opening Date", ascending=False), use_container_width=True)
 
+    # Trigger analysis
     if st.button("🚀 Run Trigger Analysis"):
         with st.spinner("Getting LTPs, please wait..."):
             trigger_results = run_trigger_analysis(ipo_df)
 
         if not trigger_results.empty:
-            display_cols = ["Stock Name", "Listing Date", "Listing Price", "LTP"]
+            display_cols = [
+                "Stock Name", "Listing Date", "Listing Price", "LTP",
+                "U-curve", "# sessions in u-curve", "% dip from LTP",
+                "BUY", "Buying Date", "EMA 20", "EMA 50",
+                "Max upside (%)", "# sessions to max",
+                "Sell 30 %", "Price"
+            ]
+
             trigger_results = trigger_results[display_cols]
 
             st.subheader("📊 IPO LTP Summary Table")
-            st.dataframe(trigger_results)
+            st.dataframe(trigger_results, use_container_width=True)
 
             st.markdown("""
             ### 🧾 Column Descriptions:
@@ -54,6 +64,11 @@ with tab1:
             - **Listing Date:** Date the stock listed  
             - **Listing Price:** Issue price from IPO  
             - **LTP:** Current/Last traded price from Yahoo Finance  
+            - **U-curve:** Whether the price has formed a U-curve  
+            - **% dip from LTP:** Dip from peak before recovery  
+            - **EMA 20/50:** Technical indicators for trend  
+            - **Max upside (%):** % increase from listing price  
+            - **Sell 30 % Price:** Ideal target for 30% gains  
             """)
         else:
             st.info("⚠️ No IPOs with valid listing date or stock data found.")
