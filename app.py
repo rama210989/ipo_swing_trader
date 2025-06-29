@@ -26,6 +26,11 @@ with tab1:
     ipo_df = load_ipo_data()
 
     st.subheader("📋 IPO List (Chittorgarh)")
+    st.markdown(f"Total IPOs shown: **{len(ipo_df)}**")
+    if not ipo_df.empty:
+        latest_date = ipo_df['Opening Date'].max()
+        if pd.notnull(latest_date):
+            st.markdown(f"Latest IPO Opening Date: **{latest_date.strftime('%Y-%m-%d')}**")
     st.dataframe(ipo_df[[
         "Company Name", "Opening Date", "Listing Date", "Issue Price (Rs.)",
         "Issue Amount (Rs.cr.)", "Listing at", "FY"
@@ -54,7 +59,6 @@ with tab1:
                 cols.insert(0, cols.pop(cols.index("Stock Name")))
                 res_df = res_df[cols]
 
-            # Rename columns for better display
             res_df = res_df.rename(columns={
                 "% Dip": "% Dip from Base Price",
                 "Max Upside (%)": "Max Upside (%)",
@@ -156,7 +160,6 @@ with tab2:
                 if sell_30_price and sell_all_price:
                     break
 
-        # Return Calculation
         if buy_price:
             if sell_30_price:
                 qty = 0.3 * shares_bought
