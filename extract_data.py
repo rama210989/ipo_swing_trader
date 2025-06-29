@@ -38,24 +38,27 @@ def fetch_ipo_data(fy_code: str, fy_label: str):
 
 
 def get_combined_ipo_data():
-    df_2024 = fetch_ipo_data("2024-25", "FY 2024-25")
-    df_2025 = fetch_ipo_data("2025-26", "FY 2025-26")
-    combined = pd.concat([df_2024, df_2025], ignore_index=True)
+    fy_codes = {
+        "2023-24": "2023-24",
+        "2024-25": "2024-25",
+        "2025-26": "2025-26"
+    }
 
-    if not combined.empty:
+    dfs = []
+    for label, code in fy_codes.items():
+        df = fetch_ipo_data(code, label)
+        if not df.empty:
+            dfs.append(df)
+
+    if dfs:
+        combined = pd.concat(dfs, ignore_index=True)
         combined = combined[[
             "Company Name", "Company URL", "Opening Date", "Closing Date", "Listing Date",
             "Issue Price (Rs.)", "Issue Amount (Rs.cr.)", "Listing at",
             "Lead Manager Name", "Lead Manager URL", "FY"
         ]].sort_values("Opening Date", ascending=False)
-
         combined.to_csv(BACKUP_CSV, index=False)
     else:
         print("⚠️ Fetched data empty, loading from backup...")
         if os.path.exists(BACKUP_CSV):
-            combined = pd.read_csv(BACKUP_CSV, parse_dates=["Opening Date", "Closing Date", "Listing Date"])
-        else:
-            print("❌ No backup file found. Returning empty DataFrame.")
-            return pd.DataFrame()
-
-    return combined
+            combined =
