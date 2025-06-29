@@ -12,7 +12,7 @@ tab1, tab2 = st.tabs(["🚀 Trigger Analysis", "💰 Trade Simulator"])
 
 # --- Trigger Tab ---
 with tab1:
-    st.markdown("*Data from Chartink screener: [IPO 365 by @finallynitin](https://chartink.com/screener/ipo-365-atfinallynitin)*")
+    st.markdown("*Data from Chittorgarh*")
 
     # Cache IPO data and support manual refresh
     @st.cache_data(ttl=3600, show_spinner="Fetching IPO data...")
