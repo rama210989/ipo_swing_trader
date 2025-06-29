@@ -14,7 +14,6 @@ tab1, tab2 = st.tabs(["🚀 Trigger Analysis", "💰 Trade Simulator"])
 with tab1:
     st.markdown("*Data from Chittorgarh*")
 
-    # Cache IPO data and support manual refresh
     @st.cache_data(ttl=3600, show_spinner="Fetching IPO data...")
     def load_ipo_data():
         return get_combined_ipo_data()
@@ -31,9 +30,10 @@ with tab1:
         latest_date = ipo_df['Opening Date'].max()
         if pd.notnull(latest_date):
             st.markdown(f"Latest IPO Opening Date: **{latest_date.strftime('%Y-%m-%d')}**")
+
     st.dataframe(ipo_df[[
         "Company Name", "Opening Date", "Listing Date", "Issue Price (Rs.)",
-        "Issue Amount (Rs.cr.)", "Listing at", "FY"
+        "Issue Amount (Rs.cr.)", "Listing at"
     ]])
 
     if st.button("🚀 Run Trigger Analysis"):
@@ -53,7 +53,6 @@ with tab1:
             st.subheader("📊 Trigger Summary Table")
             res_df = pd.DataFrame(results)
 
-            # Put "Stock Name" as first column
             cols = res_df.columns.tolist()
             if "Stock Name" in cols:
                 cols.insert(0, cols.pop(cols.index("Stock Name")))
