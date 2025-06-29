@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 from trigger import get_price_data, analyze_triggers
+from extract_data import get_combined_ipo_data
 
 # --- Page setup ---
 st.set_page_config(layout="wide", page_title="IPO Swing Trader & Simulator")
@@ -13,34 +14,34 @@ tab1, tab2 = st.tabs(["🚀 Trigger Analysis", "💰 Trade Simulator"])
 with tab1:
     st.markdown("*Data from Chartink screener: [IPO 365 by @finallynitin](https://chartink.com/screener/ipo-365-atfinallynitin)*")
 
-    # Load IPO CSV
-    csv_url = "https://raw.githubusercontent.com/rama210989/ipo_swing_trader/refs/heads/main/IPO%20365%20finallynitin%2C%20Technical%20Analysis%20Scanner.csv"
+    # Cache IPO data and support manual refresh
+    @st.cache_data(ttl=3600, show_spinner="Fetching IPO data...")
+    def load_ipo_data():
+        return get_combined_ipo_data()
 
-    @st.cache_data
-    def load_ipo_csv(url):
-        df = pd.read_csv(url)
-        df.columns = [col.strip().replace('"', '') for col in df.columns]
-        df['% Chg'] = df['% Chg'].str.replace('%', '', regex=False).astype(float)
-        df['Price'] = df['Price'].astype(float)
-        df['Volume'] = df['Volume'].str.replace(',', '', regex=False).astype(int)
-        return df
+    if st.button("🔁 Refresh IPO List (Manually)"):
+        st.cache_data.clear()
+        st.success("IPO list refreshed. Click 'Run Trigger Analysis' again.")
 
-    ipo_df = load_ipo_csv(csv_url)
+    ipo_df = load_ipo_data()
 
-    st.subheader("📋 IPO List")
-    st.dataframe(ipo_df[['Stock Name', 'Symbol', '% Chg', 'Price', 'Volume']])
+    st.subheader("📋 IPO List (Chittorgarh)")
+    st.dataframe(ipo_df[[
+        "Company Name", "Opening Date", "Listing Date", "Issue Price (Rs.)",
+        "Issue Amount (Rs.cr.)", "Listing at", "FY"
+    ]])
 
     if st.button("🚀 Run Trigger Analysis"):
         results = []
         for idx, row in ipo_df.iterrows():
-            symbol = row['Symbol']
+            symbol = row["Company Name"].split()[0].upper().replace("&", "").replace(".", "")
             ticker = symbol + ".NS"
             price_df = get_price_data(ticker)
             if price_df is None or len(price_df) < 20:
                 continue
             triggers = analyze_triggers(price_df)
             if triggers:
-                triggers['Stock Name'] = row['Stock Name']  # Add Stock Name here
+                triggers["Stock Name"] = row["Company Name"]
                 results.append(triggers)
 
         if results:
@@ -53,7 +54,7 @@ with tab1:
                 cols.insert(0, cols.pop(cols.index("Stock Name")))
                 res_df = res_df[cols]
 
-            # Rename columns for better display (adjust as per keys returned from analyze_triggers)
+            # Rename columns for better display
             res_df = res_df.rename(columns={
                 "% Dip": "% Dip from Base Price",
                 "Max Upside (%)": "Max Upside (%)",
