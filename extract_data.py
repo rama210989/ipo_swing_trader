@@ -1,10 +1,9 @@
+# extract_data.py
+
 import requests
 import pandas as pd
 from bs4 import BeautifulSoup
-import os
 import time
-
-BACKUP_CSV = "ipo_data_backup.csv"
 
 def extract_symbol(company_url):
     base_site = "https://www.chittorgarh.com"
@@ -21,7 +20,7 @@ def extract_symbol(company_url):
         if label and label.find_next("strong"):
             return label.find_next("strong").text.strip()
 
-        # Try to extract BSE Code if NSE not found
+        # Try BSE Code if NSE not found
         label = soup.find(string="BSE Code")
         if label and label.find_next("strong"):
             return label.find_next("strong").text.strip()
@@ -52,10 +51,10 @@ def fetch_all_ipo_data():
                 row["Lead Manager Name"] = lm_soup.text.strip()
                 row["Lead Manager URL"] = lm_soup.a["href"] if lm_soup.a else None
 
-                # Extract symbol from company detail page
+                # Extract NSE Symbol
                 if row["Company URL"]:
                     row["Symbol"] = extract_symbol(row["Company URL"])
-                    time.sleep(1)  # polite crawling
+                    time.sleep(1)  # Polite crawling
                 else:
                     row["Symbol"] = None
 
@@ -69,7 +68,7 @@ def fetch_all_ipo_data():
 
     df = pd.DataFrame(combined_data)
 
-    # Convert columns
+    # Clean & convert
     df["Opening Date"] = pd.to_datetime(df["Opening Date"], errors="coerce")
     df["Closing Date"] = pd.to_datetime(df["Closing Date"], errors="coerce")
     df["Listing Date"] = pd.to_datetime(df["Listing Date"].replace("Yet to list", pd.NaT), errors="coerce")
@@ -82,6 +81,7 @@ def fetch_all_ipo_data():
     return df
 
 def get_combined_ipo_data():
+    # Force fresh scrape every time (no backup read)
     df = fetch_all_ipo_data()
 
     if not df.empty:
@@ -90,14 +90,5 @@ def get_combined_ipo_data():
             "Issue Price (Rs.)", "Issue Amount (Rs.cr.)", "Listing at",
             "Lead Manager Name", "Lead Manager URL"
         ]].sort_values("Opening Date", ascending=False)
-
-        df.to_csv(BACKUP_CSV, index=False)
-    else:
-        print("⚠️ Fetched data empty, loading from backup...")
-        if os.path.exists(BACKUP_CSV):
-            df = pd.read_csv(BACKUP_CSV, parse_dates=["Opening Date", "Closing Date", "Listing Date"])
-        else:
-            print("❌ No backup file found. Returning empty DataFrame.")
-            return pd.DataFrame()
 
     return df
