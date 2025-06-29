@@ -34,7 +34,7 @@ with tab1:
         if pd.notnull(latest_date):
             st.markdown(f"Latest IPO Opening Date: **{latest_date.strftime('%Y-%m-%d')}**")
 
-    # Show key IPO data with symbol
+    # Show enriched IPO data
     st.dataframe(ipo_df[[
         "Company Name", "Symbol", "Opening Date", "Listing Date", "Issue Price (Rs.)"
     ]].sort_values("Opening Date", ascending=False), use_container_width=True)
